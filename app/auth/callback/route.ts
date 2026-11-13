@@ -25,3 +25,4 @@ export async function GET(request: NextRequest) {
   // Immediately redirect to /dashboard with no intermediate page
   return NextResponse.redirect(new URL('/dashboard', request.url));
 }
+
