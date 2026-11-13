@@ -365,7 +365,7 @@ export function renderPlan() {
   }
 }
 
-export function updateDashIdentity(patientName) {
+export function updateDashIdentity(patientName, avatarUrl) {
   const name = patientName || 'Maya Roberts';
   const first = name.split(' ')[0];
   const initials = name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
@@ -381,9 +381,20 @@ export function updateDashIdentity(patientName) {
   const hr = new Date().getHours();
   if (dashGreetingText) dashGreetingText.textContent = hr < 12 ? 'Morning' : hr < 18 ? 'Afternoon' : 'Evening';
   if (dashPatientFirst) dashPatientFirst.textContent = first;
-  if (dashAvatar) dashAvatar.textContent = initials;
-  if (dashRailAvatar) dashRailAvatar.textContent = initials;
-  if (dashProfileName) dashProfileName.textContent = name;
+
+  const renderAvatarContent = (el) => {
+    if (!el) return;
+    if (avatarUrl) {
+      el.innerHTML = `<img src="${avatarUrl}" alt="${name}" class="avatar-photo" />`;
+    } else {
+      el.textContent = initials;
+    }
+  };
+
+  renderAvatarContent(dashAvatar);
+  renderAvatarContent(dashRailAvatar);
+
+  if (dashProfileName) dashProfileName.textContent = first;
   if (dashRailName) dashRailName.textContent = name;
   if (dashMenuName) dashMenuName.textContent = name;
 }

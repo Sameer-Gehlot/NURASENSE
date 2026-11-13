@@ -148,104 +148,104 @@ dialog[open]::backdrop { animation: backdrop-in 200ms linear both; }
 #successPanel .dialog-title { padding-right: 0; }
 .success-actions { margin-top: var(--s5); display: grid; gap: var(--s3); justify-items: center; }
 
-/* ---------- Auth Tabs & OTP Verification ---------- */
-.auth-tabs {
-  display: flex;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 4px;
-  gap: 4px;
-  margin-bottom: var(--s4);
-}
-.auth-tab {
-  flex: 1;
-  padding: 9px 12px;
-  font-family: inherit;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--muted);
-  border: 0;
-  background: transparent;
-  border-radius: 7px;
-  cursor: pointer;
-  transition: all 160ms var(--ease-out);
-}
-.auth-tab:hover {
-  color: var(--ink);
-}
-.auth-tab.active {
-  background: var(--surface);
-  color: var(--petrol-deep);
-  box-shadow: 0 2px 6px rgba(4, 26, 28, 0.08);
+/* ---------- Official Google OAuth Branding & Dialog ---------- */
+.dialog-card--google {
+  max-width: 440px;
+  padding: 36px 32px 32px;
 }
 
-.otp-container {
-  margin: var(--s4) 0;
-}
-.otp-grid {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-}
-.otp-digit {
-  width: 48px;
-  height: 56px;
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface-2);
-  border: 1.5px solid #CFDCDB;
-  border-radius: 10px;
-  transition: all 160ms var(--ease-out);
-}
-.otp-digit:focus {
-  outline: none;
-  border-color: var(--petrol);
-  box-shadow: 0 0 0 3px rgba(11, 93, 99, 0.16);
-  background: #fff;
-}
-.otp-digit.error {
-  border-color: #B4452C;
-  background: rgba(180, 69, 44, 0.04);
+.google-auth-card {
+  text-align: left;
 }
 
-.otp-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: rgba(11, 93, 99, 0.08);
-  border: 1px solid rgba(11, 93, 99, 0.2);
-  border-radius: 8px;
-  margin: var(--s3) 0 var(--s4);
-  font-size: 12.5px;
-  color: var(--petrol-deep);
+.google-auth-card .dialog-title {
+  margin-top: 4px;
+  font-size: 26px;
+  line-height: 1.18;
 }
-.otp-badge {
-  font-family: var(--font-mono);
-  font-weight: 700;
+
+.google-auth-card .dialog-sub {
+  margin-top: 8px;
   font-size: 14px;
-  letter-spacing: 0.1em;
-  background: #fff;
-  padding: 3px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(11, 93, 99, 0.25);
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.google-btn-wrapper {
+  margin: 28px 0 16px;
+}
+
+/* Official Google Sign-In Button specs */
+.btn-google-official {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 12px !important;
+  background-color: #FFFFFF !important;
+  color: #1F1F1F !important;
+  border: 1px solid #747775 !important;
+  border-radius: 24px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+  font-size: 14.5px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.25px !important;
+  padding: 12px 24px !important;
+  min-height: 48px !important;
+  width: 100% !important;
+  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.12), 0 1px 3px 1px rgba(60, 64, 67, 0.08) !important;
+  transition: background-color 200ms ease, box-shadow 200ms ease, border-color 200ms ease !important;
   cursor: pointer;
+  text-decoration: none !important;
 }
-.otp-meta {
+
+.btn-google-official:hover {
+  background-color: #F8FAFD !important;
+  border-color: #5F6368 !important;
+  box-shadow: 0 1px 3px 0 rgba(60, 64, 67, 0.2), 0 4px 8px 3px rgba(60, 64, 67, 0.12) !important;
+}
+
+.btn-google-official:active {
+  background-color: #EEEEEE !important;
+  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3) !important;
+}
+
+.btn-google-official:focus-visible {
+  outline: 2px solid #1a73e8 !important;
+  outline-offset: 2px !important;
+}
+
+.google-g-logo {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.google-auth-meta {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-top: 10px;
-  font-size: 12.5px;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 18px;
+  font-size: 11.5px;
   color: var(--muted);
-}
-.auth-switch {
-  margin-top: var(--s4);
   text-align: center;
-  font-size: 13px;
-  color: var(--muted);
+}
+
+.google-auth-meta svg {
+  color: var(--petrol);
+  flex: none;
+}
+
+/* User Google Profile Photo in Navbar & Dashboard */
+.avatar {
+  overflow: hidden;
+  position: relative;
+}
+
+.avatar-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
