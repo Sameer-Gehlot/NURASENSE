@@ -49,9 +49,9 @@ const char* DEVICE_TOKEN  = "ESP32_BIOAMP_01";
 
 // Sampling Parameters
 const unsigned long SAMPLE_INTERVAL_US = 4000; // 250 Hz = 4000 microseconds
-const int BATCH_SIZE = 50;                     // 50 samples per batch = 200ms window (5 clean updates/sec)
+const int BATCH_SIZE = 75;                     // 75 samples per batch = 300ms window (silent RF gaps)
 
-// FreeRTOS Inter-Core Queue (capacity 300 samples = 1.2 seconds buffer)
+// FreeRTOS Inter-Core Queue (capacity 400 samples = 1.6 seconds buffer)
 QueueHandle_t ecgQueue;
 
 unsigned long lastSampleTime = 0;
@@ -61,6 +61,7 @@ unsigned long lastWifiRetryTime = 0;
 WiFiClientSecure client;
 HTTPClient http;
 String ingestEndpoint;
+bool isHttpConnected = false;
 
 void printWifiDiagnosis() {
   wl_status_t status = WiFi.status();
@@ -125,12 +126,16 @@ void connectWiFi() {
 // ----------------- CORE 0: NETWORK TELEMETRY TASK -----------------
 void sendBatchToCloud(int* samples, int count) {
   if (WiFi.status() != WL_CONNECTED) {
+    if (isHttpConnected) {
+      http.end();
+      isHttpConnected = false;
+    }
     return;
   }
 
   // Pre-allocated JSON formatting for zero-heap fragmentation
   String requestBody;
-  requestBody.reserve(256);
+  requestBody.reserve(600);
   requestBody = "{\"samples\":[";
   for (int i = 0; i < count; i++) {
     requestBody += String(samples[i]);
@@ -138,10 +143,14 @@ void sendBatchToCloud(int* samples, int count) {
   }
   requestBody += "]}";
 
-  http.begin(client, ingestEndpoint);
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("x-device-token", DEVICE_TOKEN);
-  http.setReuse(true); // Maintain connection alive
+  // Persistent Keep-Alive connection: does NOT renegotiate SSL handshake on every batch!
+  if (!isHttpConnected) {
+    http.begin(client, ingestEndpoint);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("x-device-token", DEVICE_TOKEN);
+    http.setReuse(true); // Maintain connection alive
+    isHttpConnected = true;
+  }
 
   int httpResponseCode = http.POST(requestBody);
 
@@ -149,10 +158,11 @@ void sendBatchToCloud(int* samples, int count) {
     if (httpResponseCode != 200) {
       Serial.print("[Cloud] HTTP Status: ");
       Serial.println(httpResponseCode);
-      String response = http.getString();
-      Serial.println(response);
     }
   } else {
+    // On socket error, close and mark to reconnect on next batch
+    http.end();
+    isHttpConnected = false;
     static unsigned long lastErrorLog = 0;
     if (millis() - lastErrorLog > 4000) {
       lastErrorLog = millis();
@@ -160,8 +170,6 @@ void sendBatchToCloud(int* samples, int count) {
       Serial.println(http.errorToString(httpResponseCode).c_str());
     }
   }
-
-  http.end();
 }
 
 void networkTask(void* pvParameters) {
@@ -211,8 +219,8 @@ void setup() {
 
   connectWiFi();
 
-  // Create FreeRTOS FIFO queue for 300 samples (~1.2 seconds buffering)
-  ecgQueue = xQueueCreate(300, sizeof(int));
+  // Create FreeRTOS FIFO queue for 400 samples (~1.6 seconds buffering)
+  ecgQueue = xQueueCreate(400, sizeof(int));
 
   // Launch Network Telemetry task on CORE 0
   xTaskCreatePinnedToCore(
