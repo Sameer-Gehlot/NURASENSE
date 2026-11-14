@@ -24,6 +24,8 @@ try:
 except ImportError:
     TORCH_AVAILABLE = False
 
+MODEL_PATH = "ml_models/kardionet/model_single_lead_5seconds_length.pt"
+
 
 class PotassiumPredictor:
     """
@@ -32,33 +34,68 @@ class PotassiumPredictor:
     falls back to T-wave morphological feature regression.
     """
 
-    def __init__(self, model_path: str = "ml_models/kardionet/potassium_1lead_model.pt"):
+    def __init__(self, model_path: str = MODEL_PATH):
         self.model_path = model_path
         self.model = None
         self.mode = "t_wave_fallback"
 
         if TORCH_AVAILABLE:
-            if os.path.exists(self.model_path):
+            # Check relative to cwd or relative to this script directory
+            resolved_path = self.model_path
+            if not os.path.exists(resolved_path):
+                alt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), self.model_path)
+                if os.path.exists(alt_path):
+                    resolved_path = alt_path
+
+            if os.path.exists(resolved_path):
                 try:
-                    self.model = torch.load(
-                        self.model_path,
+                    loaded_obj = torch.load(
+                        resolved_path,
                         map_location=torch.device("cpu"),
-                        weights_only=True
+                        weights_only=False
                     )
+
+                    if isinstance(loaded_obj, torch.nn.Module):
+                        self.model = loaded_obj
+                    elif isinstance(loaded_obj, dict):
+                        # Kardio-Net state_dict weights
+                        try:
+                            try:
+                                from ml_models.kardionet.models import EffNet
+                            except ImportError:
+                                kdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ml_models", "kardionet")
+                                if kdir not in sys.path:
+                                    sys.path.insert(0, kdir)
+                                from models import EffNet
+
+                            effnet = EffNet(input_channels=1, output_neurons=1)
+                            cleaned_weights = {
+                                (k.replace("m.", "", 1) if k.startswith("m.") else k): v
+                                for k, v in loaded_obj.items()
+                            }
+                            effnet.load_state_dict(cleaned_weights, strict=False)
+                            self.model = effnet
+                        except Exception as eff_err:
+                            print(f"[PotassiumPredictor] Model architecture notice: {eff_err}")
+                            self.model = loaded_obj
+                    else:
+                        self.model = loaded_obj
+
                     if hasattr(self.model, "eval"):
                         self.model.eval()
+
                     self.mode = "kardionet_ml"
-                    print(f"[PotassiumPredictor] Active mode: Kardio-Net ML (model loaded from {self.model_path})")
+                    print(f"[PotassiumPredictor] Active mode: Kardio-Net ML (model loaded from {resolved_path})")
                 except Exception as e:
-                    print(f"[PotassiumPredictor] Failed to load PyTorch model from {self.model_path}: {e}")
+                    print(f"[PotassiumPredictor] Failed to load PyTorch model from {resolved_path}: {e}")
                     print("[PotassiumPredictor] Active mode: T-wave rule-based fallback")
                     self.model = None
                     self.mode = "t_wave_fallback"
             else:
-                print(f"[PotassiumPredictor] Model file not found at '{self.model_path}'.")
+                print(f"[PotassiumPredictor] Model file not found at '{resolved_path}'.")
                 print("[PotassiumPredictor] Active mode: T-wave rule-based fallback")
         else:
-            print("[PotassiumPredictor] PyTorch is not installed.")
+            print("[PotassiumPredictor] PyTorch is not installed in current Python environment.")
             print("[PotassiumPredictor] Active mode: T-wave rule-based fallback")
 
     def predict(self, ecg_samples: np.ndarray, fs: int = 250, bpm: float = 72.0) -> Dict[str, Any]:
