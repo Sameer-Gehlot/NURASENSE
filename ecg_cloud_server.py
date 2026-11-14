@@ -74,21 +74,21 @@ app.add_middleware(
 )
 
 
-# In-memory device token cache: token -> (user_id, timestamp)
+# In-memory device token cache: token -> (user_id, device_db_uuid, timestamp)
 TOKEN_CACHE_TTL_SECONDS = 300  # 5 minutes
-device_token_cache: Dict[str, Tuple[str, float]] = {}
+device_token_cache: Dict[str, Tuple[str, Optional[str], float]] = {}
 
 
-async def resolve_user_id(device_token: str) -> Optional[str]:
+async def resolve_device(device_token: str) -> Tuple[Optional[str], Optional[str]]:
     """
-    Resolves user_id from device_token.
+    Resolves (user_id, device_db_uuid) from device_token.
     Uses in-memory cache with TTL to avoid rate-limiting Supabase under 25Hz batch ingestion.
     """
     now = time.time()
     if device_token in device_token_cache:
-        user_id, cached_at = device_token_cache[device_token]
+        user_id, dev_uuid, cached_at = device_token_cache[device_token]
         if now - cached_at < TOKEN_CACHE_TTL_SECONDS:
-            return user_id
+            return user_id, dev_uuid
 
     # If Supabase client is configured, query the devices table
     if supabase_client:
@@ -96,22 +96,28 @@ async def resolve_user_id(device_token: str) -> Optional[str]:
             loop = asyncio.get_event_loop()
             res = await loop.run_in_executor(
                 None,
-                lambda: supabase_client.table("devices").select("user_id").eq("device_token", device_token).single().execute()
+                lambda: supabase_client.table("devices").select("id, user_id").eq("device_token", device_token).single().execute()
             )
             if res.data and "user_id" in res.data:
                 uid = res.data["user_id"]
-                device_token_cache[device_token] = (uid, now)
-                return uid
+                dev_uuid = res.data.get("id")
+                device_token_cache[device_token] = (uid, dev_uuid, now)
+                return uid, dev_uuid
         except Exception as e:
             print(f"[Devices] Lookup error for token {device_token[:8]}...: {e}")
 
     # Fallback for local simulation or when token matches a known user pattern
     if "_" in device_token or len(device_token) > 4:
         fallback_uid = f"user_{device_token.lower()}"
-        device_token_cache[device_token] = (fallback_uid, now)
-        return fallback_uid
+        device_token_cache[device_token] = (fallback_uid, None, now)
+        return fallback_uid, None
 
-    return None
+    return None, None
+
+
+async def resolve_user_id(device_token: str) -> Optional[str]:
+    uid, _ = await resolve_device(device_token)
+    return uid
 
 
 class DeviceSignalState:
@@ -344,7 +350,7 @@ async def ingest_ecg_batch(
             detail="Empty samples array"
         )
 
-    user_id = await resolve_user_id(x_device_token)
+    user_id, device_db_id = await resolve_device(x_device_token)
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -377,7 +383,7 @@ async def ingest_ecg_batch(
             asyncio.create_task(
                 save_potassium_prediction(
                     user_id=user_id,
-                    device_id=x_device_token,
+                    device_id=device_db_id,
                     k_pred=k_pred
                 )
             )
@@ -413,17 +419,29 @@ async def ingest_ecg_batch(
     return response_data
 
 
-async def save_potassium_prediction(user_id: str, device_id: str, k_pred: dict):
+async def save_potassium_prediction(user_id: str, device_id: Optional[str], k_pred: dict):
     """
     Saves potassium prediction into in-memory history cache and Supabase 'potassium_predictions' table.
     Record schema: {user_id, device_id, predicted_level, risk_class, confidence, ecg_features: {t_amp, t_slope, bpm}}
     """
+    # Ensure device_id is either a valid UUID or None (Supabase device_id is UUID nullable)
+    valid_device_uuid = None
+    if device_id:
+        try:
+            import uuid
+            uuid.UUID(str(device_id))
+            valid_device_uuid = str(device_id)
+        except (ValueError, TypeError):
+            if str(device_id) in device_token_cache:
+                _, cached_uuid, _ = device_token_cache[str(device_id)]
+                valid_device_uuid = cached_uuid
+
     record = {
         "user_id": user_id,
-        "device_id": device_id,
-        "predicted_level": k_pred["potassium_mmol"],
-        "risk_class": k_pred["risk_class"],
-        "confidence": k_pred["confidence"],
+        "device_id": valid_device_uuid,
+        "predicted_level": float(k_pred["potassium_mmol"]),
+        "risk_class": str(k_pred["risk_class"]),
+        "confidence": float(k_pred.get("confidence", 0.90)),
         "ecg_features": k_pred.get("ecg_features", {}),
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     }
@@ -443,8 +461,9 @@ async def save_potassium_prediction(user_id: str, device_id: str, k_pred: dict):
                 None,
                 lambda: supabase_client.table("potassium_predictions").insert(record).execute()
             )
+            print(f"[Supabase] Saved potassium prediction: {record['predicted_level']} mmol/L ({record['risk_class']}) for user {user_id}")
         except Exception as e:
-            print(f"[Supabase] potassium_predictions insert notice: {e}")
+            print(f"[Supabase] potassium_predictions insert error: {e}")
 
 
 @app.get("/potassium/{user_id}/history")

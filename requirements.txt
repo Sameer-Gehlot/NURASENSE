@@ -5,5 +5,3 @@ scipy
 numpy
 python-dotenv
 websockets
-torch
-torchvision
