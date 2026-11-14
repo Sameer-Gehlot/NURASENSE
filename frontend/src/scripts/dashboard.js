@@ -834,10 +834,12 @@ export function initCloudEcgMonitor(userId) {
   const linkStatus = document.getElementById('liveEcgLinkStatus');
   const ecgState = document.getElementById('ecgState');
 
-  // Buffer of 280 samples (250Hz * 1.12 seconds - spreads P-Q-R-S-T peaks widely across screen)
-  const BUFFER_SIZE = 280;
-  const samples = new Float32Array(BUFFER_SIZE);
+  // Circular buffer: 600 samples (~2.4s max capacity)
+  const MAX_BUFFER = 600;
+  const samples = new Float32Array(MAX_BUFFER);
   let sampleIndex = 0;
+  // Default display window: 150 samples (0.60 seconds) for ultra-wide, uncongested clinical view
+  let activeBufferSize = 150;
   let currentBpm = 0;
   let isReceivingSignal = false;
   let lastSignalTime = 0;
@@ -848,6 +850,38 @@ export function initCloudEcgMonitor(userId) {
 
   // Fill with flat baseline initially
   samples.fill(0);
+
+  // Setup dynamic zoom / spread controls (0.6s Ultra Spread, 1.0s Wide, 1.6s Overview)
+  const zoomBtns = document.querySelectorAll('.ecg-zoom-btn');
+  const bufferPtsEl = document.getElementById('ecgBufferPts');
+  const bufferNoteEl = document.getElementById('ecgBufferNote');
+
+  function setZoomWindow(newSize) {
+    activeBufferSize = newSize;
+    zoomBtns.forEach(btn => {
+      if (parseInt(btn.dataset.zoom, 10) === newSize) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+    if (bufferPtsEl) {
+      bufferPtsEl.innerHTML = `${activeBufferSize} <span class="ecg-metric__unit">pts</span>`;
+    }
+    if (bufferNoteEl) {
+      const dur = (activeBufferSize / 250).toFixed(1);
+      bufferNoteEl.textContent = `${dur}s ultra-spread clinical zoom`;
+    }
+  }
+
+  zoomBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetSize = parseInt(btn.dataset.zoom, 10);
+      if (targetSize && targetSize > 0) {
+        setZoomWindow(targetSize);
+      }
+    });
+  });
 
   // Setup pause toggle
   const ecgPauseBtn = document.getElementById('ecgPause');
@@ -947,11 +981,11 @@ export function initCloudEcgMonitor(userId) {
             lastSignalTime = Date.now();
             setConnectionState('streaming');
 
-            // Shift new batch of samples into 750-sample rolling buffer
+            // Shift new batch of samples into circular buffer
             const newSamples = data.samples;
             for (let i = 0; i < newSamples.length; i++) {
               samples[sampleIndex] = newSamples[i];
-              sampleIndex = (sampleIndex + 1) % BUFFER_SIZE;
+              sampleIndex = (sampleIndex + 1) % MAX_BUFFER;
             }
 
             if (data.bpm !== undefined && data.bpm !== null) {
@@ -1048,19 +1082,19 @@ export function initCloudEcgMonitor(userId) {
     ctx.lineCap = 'round';
     ctx.beginPath();
 
-    const dx = width / BUFFER_SIZE;
+    const dx = width / activeBufferSize;
     // Scale normalized signal cleanly across ~70% of canvas height (avoids clipping at edges)
     const scaleY = (height / 2) * 0.70;
 
-    for (let i = 0; i < BUFFER_SIZE; i++) {
-      // Circular read relative to current sampleIndex for continuous scrolling
-      const readIdx = (sampleIndex + i) % BUFFER_SIZE;
+    for (let i = 0; i < activeBufferSize; i++) {
+      // Circular read: display the most recent activeBufferSize samples for continuous scrolling
+      const readIdx = (sampleIndex - activeBufferSize + i + MAX_BUFFER) % MAX_BUFFER;
       let rawVal = samples[readIdx];
 
       // Smooth 3-point weighted filter to remove micro-jitter without attenuating true R-peaks
-      if (i > 0 && i < BUFFER_SIZE - 1) {
-        const prevIdx = (sampleIndex + i - 1) % BUFFER_SIZE;
-        const nextIdx = (sampleIndex + i + 1) % BUFFER_SIZE;
+      if (i > 0 && i < activeBufferSize - 1) {
+        const prevIdx = (sampleIndex - activeBufferSize + i - 1 + MAX_BUFFER) % MAX_BUFFER;
+        const nextIdx = (sampleIndex - activeBufferSize + i + 1 + MAX_BUFFER) % MAX_BUFFER;
         rawVal = 0.2 * samples[prevIdx] + 0.6 * rawVal + 0.2 * samples[nextIdx];
       }
 
