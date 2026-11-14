@@ -25,6 +25,7 @@
   text-decoration: none;
   padding: 8px 16px;
   border-radius: var(--radius-pill);
+  white-space: nowrap !important;
   transition: color 180ms var(--ease-out), background-color 180ms var(--ease-out);
 }
 .site-nav a:hover { color: var(--petrol); background: rgba(11, 93, 99, 0.06); }

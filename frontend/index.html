@@ -55,7 +55,7 @@
                 <line x1="3" y1="18" x2="21" y2="18"></line>
               </svg>
             </button>
-            <button class="btn btn-lime js-login" id="headerLogin" type="button"><span class="js-login-label">Patient login</span></button>
+            <button class="btn btn-lime js-login" id="headerLogin" type="button"><span class="js-login-label">Sign in</span></button>
             <div class="signed-in" id="signedInCluster" hidden>
               <button class="btn btn-primary header-dashboard" id="headerDashboard" type="button" aria-label="Open dashboard">
                 <svg class="od-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -63,11 +63,13 @@
                 </svg>
                 <span>Dashboard</span>
               </button>
-              <span class="avatar" id="headerAvatar" aria-hidden="true">MR</span>
-              <span class="signed-in-text">
-                <span class="signed-in-label">Signed in</span>
-                <span class="signed-in-name" id="headerName">Maya Roberts</span>
-              </span>
+              <div class="signed-in-pill">
+                <span class="avatar" id="headerAvatar" aria-hidden="true">S</span>
+                <span class="signed-in-text">
+                  <span class="signed-in-label">Signed in</span>
+                  <span class="signed-in-name" id="headerName">Sameer</span>
+                </span>
+              </div>
               <button class="btn btn-quiet" id="headerSignOut" type="button">Sign out</button>
             </div>
           </div>
