@@ -1048,23 +1048,25 @@ export function initCloudEcgMonitor(userId) {
     ctx.beginPath();
 
     const dx = width / BUFFER_SIZE;
-    // Dynamic clinical scaling: tall needle R-peaks with calm baseline (matches reference ECG)
-    const scaleY = (height / 2) * 0.72;
+    // Enhanced clinical gain: tall majestic R-peaks with smooth baseline (matches MATLAB reference)
+    const scaleY = (height / 2) * 0.86;
 
     for (let i = 0; i < BUFFER_SIZE; i++) {
       // Circular read relative to current sampleIndex for continuous scrolling
       const readIdx = (sampleIndex + i) % BUFFER_SIZE;
       let rawVal = samples[readIdx];
 
-      // 3-point moving average to filter DAC/ADC quantization steps
-      if (i > 0 && i < BUFFER_SIZE - 1) {
-        const prevIdx = (sampleIndex + i - 1) % BUFFER_SIZE;
-        const nextIdx = (sampleIndex + i + 1) % BUFFER_SIZE;
-        rawVal = 0.2 * samples[prevIdx] + 0.6 * rawVal + 0.2 * samples[nextIdx];
+      // 5-point binomial smoothing filter (eliminates fine DAC/EMG ripple while preserving sharp R-peak needles)
+      if (i >= 2 && i < BUFFER_SIZE - 2) {
+        const im2 = (sampleIndex + i - 2) % BUFFER_SIZE;
+        const im1 = (sampleIndex + i - 1) % BUFFER_SIZE;
+        const ip1 = (sampleIndex + i + 1) % BUFFER_SIZE;
+        const ip2 = (sampleIndex + i + 2) % BUFFER_SIZE;
+        rawVal = 0.06 * samples[im2] + 0.24 * samples[im1] + 0.40 * rawVal + 0.24 * samples[ip1] + 0.06 * samples[ip2];
       }
 
-      // Soft saturation using tanh curve: preserves small P/T waves and caps peaks smoothly
-      const normalizedVal = Math.tanh(rawVal * 0.85);
+      // Enhanced gain (1.9x) with soft hyperbolic tangent ceiling: R-peaks spike tall without rail clipping
+      const normalizedVal = Math.tanh(rawVal * 1.85);
       const y = midY - (normalizedVal * scaleY);
       const clampedY = Math.max(6, Math.min(height - 6, y));
       const x = i * dx;
