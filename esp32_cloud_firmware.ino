@@ -18,6 +18,9 @@
 #include <WiFiClientSecure.h>
 
 // ----------------- CONFIGURATION -----------------
+// IMPORTANT: ESP32 only supports 2.4 GHz Wi-Fi!
+// If using a phone hotspot, ensure "Maximize Compatibility" (iPhone)
+// or "2.4 GHz Band" (Android) is ENABLED!
 const char* WIFI_SSID     = "Nihal Kumar";
 const char* WIFI_PASSWORD = "123456780";
 
@@ -25,7 +28,6 @@ const char* WIFI_PASSWORD = "123456780";
 const char* RAILWAY_URL   = "https://nurasense-production.up.railway.app";
 
 // The device token registered in your NuraSense dashboard
-// (Pair this in NuraSense Dashboard -> Pair Device)
 const char* DEVICE_TOKEN  = "ESP32_BIOAMP_01";
 
 // Pin Configuration:
@@ -47,24 +49,53 @@ const int BATCH_SIZE = 10;                     // 10 samples per batch = 40ms wi
 int sampleBatch[BATCH_SIZE];
 int sampleIndex = 0;
 unsigned long lastSampleTime = 0;
-unsigned long lastBatchPostTime = 0;
+unsigned long lastWifiRetryTime = 0;
 
 // Reusable secure client for low-latency HTTPS Keep-Alive
 WiFiClientSecure client;
 HTTPClient http;
 String ingestEndpoint;
 
+void printWifiDiagnosis() {
+  wl_status_t status = WiFi.status();
+  Serial.print("[WiFi Status] ");
+  switch (status) {
+    case WL_NO_SSID_AVAIL:
+      Serial.println("SSID NOT FOUND! Make sure your hotspot is ON and set to 2.4 GHz (not 5 GHz).");
+      break;
+    case WL_CONNECT_FAILED:
+      Serial.println("PASSWORD INCORRECT or connection rejected.");
+      break;
+    case WL_DISCONNECTED:
+      Serial.println("Disconnected / connecting...");
+      break;
+    case WL_IDLE_STATUS:
+      Serial.println("Idle...");
+      break;
+    default:
+      Serial.print("Code: ");
+      Serial.println((int)status);
+      break;
+  }
+}
+
 void connectWiFi() {
   Serial.println();
-  Serial.print("[WiFi] Connecting to ");
-  Serial.println(WIFI_SSID);
+  Serial.print("[WiFi] Connecting to '");
+  Serial.print(WIFI_SSID);
+  Serial.println("'...");
+
+  // Reset WiFi stack cleanly to avoid 'sta is connecting, cannot set config'
+  WiFi.disconnect(true, true);
+  delay(200);
 
   WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 40) {
-    delay(250);
+  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+    delay(300);
     Serial.print(".");
     digitalWrite(LED_PIN, !digitalRead(LED_PIN));
     attempts++;
@@ -78,7 +109,8 @@ void connectWiFi() {
     digitalWrite(LED_PIN, HIGH);
   } else {
     Serial.println();
-    Serial.println("[WiFi] Connection failed. Will retry in loop.");
+    Serial.println("[WiFi] Connection attempt timed out.");
+    printWifiDiagnosis();
     digitalWrite(LED_PIN, LOW);
   }
 }
@@ -120,14 +152,12 @@ void setup() {
 }
 
 void sendBatchToCloud() {
+  // If not connected to WiFi, skip batch and do not spam reconnect
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[Cloud] WiFi disconnected. Reconnecting...");
-    connectWiFi();
     return;
   }
 
   // Build JSON payload: {"samples":[s0,s1,...,s9]}
-  // Direct zero-dependency serialization
   String requestBody = "{\"samples\":[";
   for (int i = 0; i < BATCH_SIZE; i++) {
     requestBody += String(sampleBatch[i]);
@@ -146,17 +176,20 @@ void sendBatchToCloud() {
   int httpResponseCode = http.POST(requestBody);
 
   if (httpResponseCode > 0) {
-    if (httpResponseCode == 200) {
-      // 200 OK — Ingested and broadcast to dashboard
-    } else {
+    if (httpResponseCode != 200) {
       Serial.print("[Cloud] HTTP Status: ");
       Serial.println(httpResponseCode);
       String response = http.getString();
       Serial.println(response);
     }
   } else {
-    Serial.print("[Cloud] POST failed, error: ");
-    Serial.println(http.errorToString(httpResponseCode).c_str());
+    // Only log occasionally to avoid flooding serial buffer
+    static unsigned long lastErrorLog = 0;
+    if (millis() - lastErrorLog > 3000) {
+      lastErrorLog = millis();
+      Serial.print("[Cloud] POST failed, error: ");
+      Serial.println(http.errorToString(httpResponseCode).c_str());
+    }
   }
 
   http.end();
@@ -174,7 +207,7 @@ void loop() {
     #if ENABLE_LEADS_OFF
     bool leadsOff = (digitalRead(LO_PLUS_PIN) == HIGH || digitalRead(LO_MINUS_PIN) == HIGH);
     if (leadsOff) {
-      rawValue = 0; // Flatline if electrodes detached
+      rawValue = 0;
     } else {
       rawValue = analogRead(ECG_PIN);
     }
@@ -193,6 +226,15 @@ void loop() {
     }
   }
 
-  // Yield to allow ESP32 WiFi background tasks to run smoothly
+  // Non-blocking WiFi reconnect check every 8 seconds
+  if (WiFi.status() != WL_CONNECTED) {
+    if (millis() - lastWifiRetryTime > 8000) {
+      lastWifiRetryTime = millis();
+      Serial.println("[WiFi] Lost connection. Attempting clean reconnect...");
+      WiFi.disconnect(false);
+      WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    }
+  }
+
   yield();
 }
