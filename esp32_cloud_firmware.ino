@@ -8,21 +8,21 @@
  * Batch transmission: 10 samples per POST (every 40 ms)
  * Protocol: HTTPS POST with 'x-device-token' header
  * Payload format: {"samples": [s0, s1, s2, s3, s4, s5, s6, s7, s8, s9]}
+ * 
+ * Zero external library dependencies (uses built-in ESP32 WiFi & HTTPClient)
  * ==============================================================================
  */
 
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
-#include <ArduinoJson.h>
 
-// ----------------- CONFIGURATION (EDIT THESE) -----------------
-const char* WIFI_SSID     = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+// ----------------- CONFIGURATION -----------------
+const char* WIFI_SSID     = "Nihal Kumar";
+const char* WIFI_PASSWORD = "123456780";
 
-// Your Railway Cloud Server URL (no trailing slash)
-// Example: "https://nurasense-production.up.railway.app"
-const char* RAILWAY_URL   = "https://YOUR_RAILWAY_URL";
+// Your Railway Cloud Server URL (no trailing slash, no brackets)
+const char* RAILWAY_URL   = "https://nurasense-production.up.railway.app";
 
 // The device token registered in your NuraSense dashboard
 // (Pair this in NuraSense Dashboard -> Pair Device)
@@ -32,8 +32,12 @@ const char* DEVICE_TOKEN  = "ESP32_BIOAMP_01";
 // Use ADC1 pins (GPIO 34, 35, 36, 39) - ADC2 cannot be used when Wi-Fi is enabled!
 #define ECG_PIN           34     // Analog input from ECG sensor OUT
 #define LED_PIN           2      // Status LED (GPIO 2 on most ESP32 boards)
-#define LO_PLUS_PIN       32     // Leads-off detect + (AD8232 LO+) [Optional]
-#define LO_MINUS_PIN      33     // Leads-off detect - (AD8232 LO-) [Optional]
+
+// Set to true ONLY if you wired LO+ and LO- on AD8232.
+// For BioAmp BisCute (3-pin: VCC, GND, OUT), leave this false!
+#define ENABLE_LEADS_OFF  false
+#define LO_PLUS_PIN       32     // Leads-off detect + [AD8232 only]
+#define LO_MINUS_PIN      33     // Leads-off detect - [AD8232 only]
 
 // Sampling Parameters
 const unsigned long SAMPLE_INTERVAL_US = 4000; // 250 Hz = 4000 microseconds
@@ -90,10 +94,11 @@ void setup() {
 
   pinMode(LED_PIN, OUTPUT);
   pinMode(ECG_PIN, INPUT);
-  
-  // Optional Leads-off inputs
-  pinMode(LO_PLUS_PIN, INPUT);
-  pinMode(LO_MINUS_PIN, INPUT);
+
+  #if ENABLE_LEADS_OFF
+  pinMode(LO_PLUS_PIN, INPUT_PULLDOWN);
+  pinMode(LO_MINUS_PIN, INPUT_PULLDOWN);
+  #endif
 
   // Set ESP32 ADC resolution (12-bit: 0 - 4095)
   analogReadResolution(12);
@@ -121,15 +126,16 @@ void sendBatchToCloud() {
     return;
   }
 
-  // Build JSON payload: {"samples": [s0, s1, ..., s9]}
-  StaticJsonDocument<256> doc;
-  JsonArray samplesArray = doc.createNestedArray("samples");
+  // Build JSON payload: {"samples":[s0,s1,...,s9]}
+  // Direct zero-dependency serialization
+  String requestBody = "{\"samples\":[";
   for (int i = 0; i < BATCH_SIZE; i++) {
-    samplesArray.add(sampleBatch[i]);
+    requestBody += String(sampleBatch[i]);
+    if (i < BATCH_SIZE - 1) {
+      requestBody += ",";
+    }
   }
-
-  String requestBody;
-  serializeJson(doc, requestBody);
+  requestBody += "]}";
 
   // Send HTTPS POST to Railway /ingest
   http.begin(client, ingestEndpoint);
@@ -140,9 +146,8 @@ void sendBatchToCloud() {
   int httpResponseCode = http.POST(requestBody);
 
   if (httpResponseCode > 0) {
-    // 200 OK
     if (httpResponseCode == 200) {
-      // Batch acknowledged by NuraSense cloud engine
+      // 200 OK — Ingested and broadcast to dashboard
     } else {
       Serial.print("[Cloud] HTTP Status: ");
       Serial.println(httpResponseCode);
@@ -164,16 +169,18 @@ void loop() {
   if (currentMicros - lastSampleTime >= SAMPLE_INTERVAL_US) {
     lastSampleTime += SAMPLE_INTERVAL_US;
 
-    // Optional leads-off detection
-    // If either LO+ or LO- is HIGH, electrodes are disconnected
-    bool leadsOff = (digitalRead(LO_PLUS_PIN) == HIGH || digitalRead(LO_MINUS_PIN) == HIGH);
-
     int rawValue = 0;
+
+    #if ENABLE_LEADS_OFF
+    bool leadsOff = (digitalRead(LO_PLUS_PIN) == HIGH || digitalRead(LO_MINUS_PIN) == HIGH);
     if (leadsOff) {
       rawValue = 0; // Flatline if electrodes detached
     } else {
       rawValue = analogRead(ECG_PIN);
     }
+    #else
+    rawValue = analogRead(ECG_PIN);
+    #endif
 
     // Store in rolling 10-sample batch buffer
     sampleBatch[sampleIndex] = rawValue;
