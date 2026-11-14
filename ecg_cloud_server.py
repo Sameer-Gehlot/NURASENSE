@@ -111,43 +111,54 @@ class DeviceSignalState:
     """
     Per-device stateful streaming DSP filter & Pan-Tompkins QRS analyzer.
     Sampling rate: 250 Hz
+    Filters:
+      - 50 Hz Notch (Q=10.0) for Indian grid ±2.5Hz powerline hum elimination
+      - 0.67 Hz - 35.0 Hz Butterworth 3rd-order bandpass filter (AAMI clinical standard)
+      - Dedicated 6.0 - 18.0 Hz bandpass for robust QRS R-peak energy isolation
+      - Stateful IIR streaming (zi) across batch chunks
+      - Dynamic AGC envelope for clear spike differentiation matching clinical ECG
+      - Multi-beat trimmed-mean RR averaging & exponential damping for stable BPM
     """
     def __init__(self, fs: int = 250):
         self.fs = fs
         nyq = 0.5 * fs
 
-        # 50 Hz Notch filter (Q=30)
-        self.b_notch, self.a_notch = signal.iirnotch(50.0 / nyq, Q=30.0)
-        # 0.5 - 40.0 Hz Butterworth 2nd-order bandpass filter
-        self.b_band, self.a_band = signal.butter(2, [0.5 / nyq, 40.0 / nyq], btype="bandpass")
+        # 50 Hz Notch filter (Q=10.0 for robust ±2.5Hz mains hum rejection)
+        self.b_notch, self.a_notch = signal.iirnotch(50.0 / nyq, Q=10.0)
+        # 0.67 - 35.0 Hz Butterworth 3rd-order bandpass filter (removes respiration wander & EMG)
+        self.b_band, self.a_band = signal.butter(3, [0.67 / nyq, 35.0 / nyq], btype="bandpass")
+        # 6.0 - 18.0 Hz dedicated bandpass for R-peak QRS isolation
+        self.b_qrs, self.a_qrs = signal.butter(2, [6.0 / nyq, 18.0 / nyq], btype="bandpass")
 
-        # Initial filter conditions for seamless streaming across 10-sample batches
+        # Initial filter conditions for seamless streaming across batches
         self.zi_notch = signal.lfilter_zi(self.b_notch, self.a_notch) * 0.0
         self.zi_band = signal.lfilter_zi(self.b_band, self.a_band) * 0.0
 
-        # Continuous slow-moving DC baseline tracker (across seconds, NOT per 10-sample batch)
+        # Continuous slow-moving DC baseline tracker
         self.dc_baseline: Optional[float] = None
-        # Slow-moving peak envelope for natural physiological scaling
+        # Peak AGC envelope: fast attack, slow decay
         self.envelope: float = 400.0
 
-        # Rolling buffer of filtered samples for Pan-Tompkins peak detection (750 samples = 3.0s)
-        self.filtered_history: deque = deque(maxlen=750)
+        # Rolling buffer of filtered samples (1500 samples = 6.0s at 250Hz)
+        self.filtered_history: deque = deque(maxlen=1500)
+        # Validated RR interval history across consecutive heartbeats
+        self.valid_rr_history: deque = deque(maxlen=8)
         self.last_bpm: float = 72.0
+        self.smoothed_bpm: Optional[float] = None
         self.last_update_time: float = time.time()
         self.lock = asyncio.Lock()
 
     def filter_batch(self, raw_samples: List[float]) -> np.ndarray:
-        """Applies streaming 50Hz notch and 0.5-40Hz bandpass filtering."""
+        """Applies streaming 50Hz notch and 0.67-35Hz clinical bandpass filtering."""
         arr = np.asarray(raw_samples, dtype=np.float32)
         if len(arr) == 0:
             return np.array([], dtype=np.float32)
 
-        # Update smooth continuous baseline (avoids tearing signal in 10-sample chunks)
+        # Update smooth continuous baseline (avoids tearing signal at batch edges)
         batch_mean = float(np.mean(arr))
         if self.dc_baseline is None:
             self.dc_baseline = batch_mean
         else:
-            # Slow adaptation time constant (~2 seconds)
             alpha = 0.04
             self.dc_baseline = (1.0 - alpha) * self.dc_baseline + alpha * batch_mean
 
@@ -158,11 +169,17 @@ class DeviceSignalState:
         notched, self.zi_notch = signal.lfilter(self.b_notch, self.a_notch, centered, zi=self.zi_notch)
         bandpassed, self.zi_band = signal.lfilter(self.b_band, self.a_band, notched, zi=self.zi_band)
 
-        # Smooth envelope tracking so quiet baseline stays quiet and QRS peaks spike naturally
-        batch_max = float(np.max(np.abs(bandpassed))) if len(bandpassed) > 0 else 100.0
-        self.envelope = max(200.0, 0.985 * self.envelope + 0.015 * batch_max)
+        # Dynamic AGC envelope tracking: fast attack on tall QRS, slow decay across cardiac cycles
+        batch_peak = float(np.max(np.abs(bandpassed))) if len(bandpassed) > 0 else 50.0
+        if batch_peak > self.envelope:
+            # Fast attack (reaches full scale in 2-3 batches)
+            self.envelope = 0.6 * self.envelope + 0.4 * batch_peak
+        else:
+            # Slow decay (half-life ~ 1.5 seconds)
+            self.envelope = 0.992 * self.envelope + 0.008 * 120.0
+        self.envelope = max(self.envelope, 100.0)
 
-        # Normalized signal around 0 (QRS complexes reach ~ ±0.8 to ±1.0)
+        # Normalized signal around 0 (R-peaks reach ~ ±0.9 to ±1.3, P/T waves ~ ±0.15 to ±0.3)
         normalized = bandpassed / self.envelope
 
         for s in normalized:
@@ -173,42 +190,67 @@ class DeviceSignalState:
 
     def calculate_bpm(self) -> float:
         """
-        Pan-Tompkins Algorithm for QRS detection:
-        1. Bandpassed signal (from filtered_history)
-        2. Five-point derivative
-        3. Squaring
-        4. Moving window integration (150ms window = 37 samples)
-        5. Adaptive peak thresholding
+        Pan-Tompkins Algorithm with multi-beat RR outlier rejection & exponential damping:
+        1. 5.0-second window (1250 samples) for high-confidence multi-beat analysis
+        2. Dedicated 6-18 Hz bandpass for QRS energy isolation (eliminates T-wave false triggers)
+        3. Derivative + Squaring + 120ms Moving Window Integration
+        4. Adaptive thresholding with 380ms refractory blanking (max 158 BPM)
+        5. Interquartile / Trimmed mean over rolling RR history to reject noise & motion spikes
+        6. Exponential smoothing for rock-solid, clinically steady displayed BPM
         """
-        if len(self.filtered_history) < 250:
+        if len(self.filtered_history) < 500:
             return self.last_bpm
 
-        sig = np.array(self.filtered_history, dtype=np.float32)
+        # Analyze up to last 1250 samples (5.0s)
+        sig = np.array(list(self.filtered_history)[-1250:], dtype=np.float32)
 
-        # Derivative
-        diff = np.diff(sig)
-        # Squaring
+        # 1. Dedicated QRS bandpass (6 - 18 Hz)
+        try:
+            qrs_sig = signal.filtfilt(self.b_qrs, self.a_qrs, sig)
+        except Exception:
+            qrs_sig = sig
+
+        # 2. Derivative
+        diff = np.diff(qrs_sig)
+        # 3. Squaring
         squared = diff ** 2
 
-        # Moving window integration (150ms)
-        win_size = max(2, int(0.15 * self.fs))
+        # 4. Moving window integration (120ms = 30 samples at 250Hz)
+        win_size = max(2, int(0.12 * self.fs))
         integrated = np.convolve(squared, np.ones(win_size) / win_size, mode="same")
 
-        # Thresholding
+        # 5. Adaptive thresholding
         threshold = np.mean(integrated) + 1.2 * np.std(integrated)
-        # Refractory period: minimum 350ms between beats (max 171 bpm)
-        min_distance = int(0.35 * self.fs)
+        # Refractory period: minimum 380ms between beats (max 158 bpm)
+        min_distance = int(0.38 * self.fs)
 
         peaks, _ = signal.find_peaks(integrated, height=threshold, distance=min_distance)
 
-        if len(peaks) >= 2:
+        if len(peaks) >= 3:
             rr_intervals = np.diff(peaks) / float(self.fs)
-            median_rr = float(np.median(rr_intervals))
-            if median_rr > 0:
-                bpm = round(60.0 / median_rr, 1)
-                # Physiological bounds check (30 - 220 BPM)
-                if 30 <= bpm <= 220:
-                    self.last_bpm = bpm
+            # Physiological bounds check (40 - 160 BPM -> 0.38s - 1.50s)
+            valid_rr = [float(r) for r in rr_intervals if 0.38 <= r <= 1.50]
+
+            for r in valid_rr:
+                self.valid_rr_history.append(r)
+
+            if len(self.valid_rr_history) >= 3:
+                # Trimmed mean: drop highest and lowest to eliminate outlier/noise beats
+                sorted_rr = sorted(list(self.valid_rr_history))
+                trimmed = sorted_rr[1:-1] if len(sorted_rr) >= 4 else sorted_rr
+                avg_rr = float(np.mean(trimmed))
+
+                if avg_rr > 0:
+                    instant_bpm = 60.0 / avg_rr
+
+                    if 35.0 <= instant_bpm <= 180.0:
+                        if self.smoothed_bpm is None:
+                            self.smoothed_bpm = instant_bpm
+                        else:
+                            # Exponential smoothing: 85% previous, 15% new (gentle, steady glide)
+                            self.smoothed_bpm = 0.85 * self.smoothed_bpm + 0.15 * instant_bpm
+
+                        self.last_bpm = round(self.smoothed_bpm, 1)
 
         return self.last_bpm
 

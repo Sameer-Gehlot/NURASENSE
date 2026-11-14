@@ -834,8 +834,8 @@ export function initCloudEcgMonitor(userId) {
   const linkStatus = document.getElementById('liveEcgLinkStatus');
   const ecgState = document.getElementById('ecgState');
 
-  // Buffer of 750 samples (250Hz * 3 seconds)
-  const BUFFER_SIZE = 750;
+  // Buffer of 500 samples (250Hz * 2.0 seconds - displays ~2 to 3 distinct spaced beats)
+  const BUFFER_SIZE = 500;
   const samples = new Float32Array(BUFFER_SIZE);
   let sampleIndex = 0;
   let currentBpm = 0;
@@ -1048,17 +1048,25 @@ export function initCloudEcgMonitor(userId) {
     ctx.beginPath();
 
     const dx = width / BUFFER_SIZE;
-    // Dynamic soft scaling so QRS peaks fit cleanly without hitting the canvas rails
-    const scaleY = height * 0.32;
+    // Dynamic clinical scaling: tall needle R-peaks with calm baseline (matches reference ECG)
+    const scaleY = (height / 2) * 0.72;
 
     for (let i = 0; i < BUFFER_SIZE; i++) {
       // Circular read relative to current sampleIndex for continuous scrolling
       const readIdx = (sampleIndex + i) % BUFFER_SIZE;
-      const rawVal = samples[readIdx];
+      let rawVal = samples[readIdx];
+
+      // 3-point moving average to filter DAC/ADC quantization steps
+      if (i > 0 && i < BUFFER_SIZE - 1) {
+        const prevIdx = (sampleIndex + i - 1) % BUFFER_SIZE;
+        const nextIdx = (sampleIndex + i + 1) % BUFFER_SIZE;
+        rawVal = 0.2 * samples[prevIdx] + 0.6 * rawVal + 0.2 * samples[nextIdx];
+      }
+
       // Soft saturation using tanh curve: preserves small P/T waves and caps peaks smoothly
-      const normalizedVal = Math.tanh(rawVal * 0.95);
+      const normalizedVal = Math.tanh(rawVal * 0.85);
       const y = midY - (normalizedVal * scaleY);
-      const clampedY = Math.max(10, Math.min(height - 10, y));
+      const clampedY = Math.max(6, Math.min(height - 6, y));
       const x = i * dx;
 
       if (i === 0) {
