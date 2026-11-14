@@ -125,6 +125,11 @@ class DeviceSignalState:
         self.zi_notch = signal.lfilter_zi(self.b_notch, self.a_notch) * 0.0
         self.zi_band = signal.lfilter_zi(self.b_band, self.a_band) * 0.0
 
+        # Continuous slow-moving DC baseline tracker (across seconds, NOT per 10-sample batch)
+        self.dc_baseline: Optional[float] = None
+        # Slow-moving peak envelope for natural physiological scaling
+        self.envelope: float = 400.0
+
         # Rolling buffer of filtered samples for Pan-Tompkins peak detection (750 samples = 3.0s)
         self.filtered_history: deque = deque(maxlen=750)
         self.last_bpm: float = 72.0
@@ -134,25 +139,37 @@ class DeviceSignalState:
     def filter_batch(self, raw_samples: List[float]) -> np.ndarray:
         """Applies streaming 50Hz notch and 0.5-40Hz bandpass filtering."""
         arr = np.asarray(raw_samples, dtype=np.float32)
+        if len(arr) == 0:
+            return np.array([], dtype=np.float32)
 
-        # Remove DC offset if values are raw ADC counts (e.g. 0-4095 or 0-65535)
-        if len(arr) > 0 and np.mean(arr) > 50.0:
-            arr = arr - np.mean(arr)
+        # Update smooth continuous baseline (avoids tearing signal in 10-sample chunks)
+        batch_mean = float(np.mean(arr))
+        if self.dc_baseline is None:
+            self.dc_baseline = batch_mean
+        else:
+            # Slow adaptation time constant (~2 seconds)
+            alpha = 0.04
+            self.dc_baseline = (1.0 - alpha) * self.dc_baseline + alpha * batch_mean
 
-        # Stream filtering with state persistence
-        notched, self.zi_notch = signal.lfilter(self.b_notch, self.a_notch, arr, zi=self.zi_notch)
+        # Center signal around continuous baseline
+        centered = arr - self.dc_baseline
+
+        # Stream filtering with state persistence across batches
+        notched, self.zi_notch = signal.lfilter(self.b_notch, self.a_notch, centered, zi=self.zi_notch)
         bandpassed, self.zi_band = signal.lfilter(self.b_band, self.a_band, notched, zi=self.zi_band)
 
-        # Scale to standard normalized amplitude (-1.5 to 1.5 range)
-        max_abs = np.max(np.abs(bandpassed))
-        if max_abs > 10.0:
-            bandpassed = bandpassed / (max_abs + 1e-5)
+        # Smooth envelope tracking so quiet baseline stays quiet and QRS peaks spike naturally
+        batch_max = float(np.max(np.abs(bandpassed))) if len(bandpassed) > 0 else 100.0
+        self.envelope = max(200.0, 0.985 * self.envelope + 0.015 * batch_max)
 
-        for s in bandpassed:
+        # Normalized signal around 0 (QRS complexes reach ~ ±0.8 to ±1.0)
+        normalized = bandpassed / self.envelope
+
+        for s in normalized:
             self.filtered_history.append(float(s))
 
         self.last_update_time = time.time()
-        return bandpassed
+        return normalized
 
     def calculate_bpm(self) -> float:
         """

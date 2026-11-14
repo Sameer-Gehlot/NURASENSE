@@ -1048,16 +1048,17 @@ export function initCloudEcgMonitor(userId) {
     ctx.beginPath();
 
     const dx = width / BUFFER_SIZE;
-    // Scale factor to map filtered microvolts / sensor counts to canvas height
-    const scaleY = height * 0.38;
+    // Dynamic soft scaling so QRS peaks fit cleanly without hitting the canvas rails
+    const scaleY = height * 0.32;
 
     for (let i = 0; i < BUFFER_SIZE; i++) {
       // Circular read relative to current sampleIndex for continuous scrolling
       const readIdx = (sampleIndex + i) % BUFFER_SIZE;
       const rawVal = samples[readIdx];
-      // Normalize signal: rawVal is centered around 0 from bandpass filter
-      const y = midY - (rawVal * scaleY);
-      const clampedY = Math.max(8, Math.min(height - 8, y));
+      // Soft saturation using tanh curve: preserves small P/T waves and caps peaks smoothly
+      const normalizedVal = Math.tanh(rawVal * 0.95);
+      const y = midY - (normalizedVal * scaleY);
+      const clampedY = Math.max(10, Math.min(height - 10, y));
       const x = i * dx;
 
       if (i === 0) {
