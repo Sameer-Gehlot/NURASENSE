@@ -181,6 +181,7 @@ class DeviceSignalState:
 
         # Center signal around continuous baseline
         centered = arr - self.dc_baseline
+        centered = centered * -1.0
 
         # Stream filtering with state persistence across batches
         notched, self.zi_notch = signal.lfilter(self.b_notch, self.a_notch, centered, zi=self.zi_notch)
