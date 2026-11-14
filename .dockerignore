@@ -1,0 +1,9 @@
+.git
+.venv
+venv
+__pycache__
+frontend/node_modules
+frontend/dist
+SAMSUNG_WATCH
+.gemini
+*.pyc
