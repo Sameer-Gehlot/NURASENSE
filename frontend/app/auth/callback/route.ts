@@ -2,6 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+/**
+ * Supabase OAuth Callback Route Handler
+ * Exchanges OAuth authorization code for session and immediately redirects to /dashboard
+ * with zero intermediate pages.
+ */
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
@@ -19,4 +24,3 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.redirect(new URL('/dashboard', request.url));
 }
-

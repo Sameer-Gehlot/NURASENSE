@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /**
- * Supabase OAuth Callback Route Handler (Next.js 14 App Router)
+ * Supabase OAuth Callback Route Handler
  * Exchanges OAuth authorization code for session and immediately redirects to /dashboard
  * with zero intermediate pages.
  */
@@ -22,7 +22,5 @@ export async function GET(request: NextRequest) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  // Immediately redirect to /dashboard with no intermediate page
   return NextResponse.redirect(new URL('/dashboard', request.url));
 }
-

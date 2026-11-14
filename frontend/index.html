@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Public+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script>document.documentElement.classList.remove('no-js');document.documentElement.classList.add('js');</script>
   <link rel="stylesheet" href="/src/styles/main.css">
 </head>
@@ -844,6 +845,15 @@
         </svg>
         <span>Care circle</span>
       </button>
+      <button class="app-nav__btn js-open-pair-device" type="button" id="navPairDeviceBtn">
+        <svg class="od-icon" style="--od-icon-size:17px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="5" y="2" width="14" height="20" rx="3" ry="3"/>
+          <path d="M12 18h.01"/>
+          <path d="M8 6h8"/>
+          <path d="M9 10h6"/>
+        </svg>
+        <span>Pair Device</span>
+      </button>
     </nav>
 
     <div class="app-rail__foot">
@@ -985,46 +995,33 @@
 
             <div class="ecg-monitor" id="ecgMonitor">
               <div class="ecg-bar">
-                <span class="ecg-bar__live"><span class="live-dot"></span><span id="ecgState">Live</span></span>
-                <span>25 mm/s · 10 mm/mV · 98% signal</span>
+                <span class="ecg-bar__live"><span class="live-dot" id="ecgLiveDot"></span><span id="ecgState">Waiting for signal...</span></span>
+                <span class="ecg-specs">250 Hz Lead I · 50Hz Notch · 0.5–40Hz Bandpass</span>
+                <button type="button" class="mini-btn js-open-pair-device" style="margin-left: auto;">+ Pair ESP32</button>
               </div>
-              <svg class="ecg-canvas" viewBox="0 0 900 200" preserveAspectRatio="none" role="img" aria-label="Simulated single-lead ECG trace at 86 beats per minute">
-                <defs>
-                  <path id="dashBeat" d="M0 100H18Q24 92 30 100H44L48 105L54 40L61 158L67 100H82Q94 86 106 100H150"/>
-                </defs>
-                <g class="ecg-scroll">
-                  <use href="#dashBeat" class="ecg-trace-main" x="0"/>
-                  <use href="#dashBeat" class="ecg-trace-main" x="150"/>
-                  <use href="#dashBeat" class="ecg-trace-main" x="300"/>
-                  <use href="#dashBeat" class="ecg-trace-main" x="450"/>
-                  <use href="#dashBeat" class="ecg-trace-main" x="600"/>
-                  <use href="#dashBeat" class="ecg-trace-main" x="750"/>
-                  <use href="#dashBeat" class="ecg-trace-main" x="900"/>
-                  <use href="#dashBeat" class="ecg-trace-main" x="1050"/>
-                </g>
-              </svg>
+              <canvas id="liveEcgCanvas" class="ecg-realtime-canvas" width="900" height="220" role="img" aria-label="Real-time ECG stream"></canvas>
             </div>
 
             <div class="ecg-readouts">
               <div class="ecg-metric ecg-metric--primary">
                 <span class="ecg-metric__label">Heart rate</span>
-                <span class="ecg-metric__value">86<span class="ecg-metric__unit">bpm</span></span>
-                <span class="ecg-metric__note">Baseline 84–90</span>
+                <span class="ecg-metric__value" id="liveEcgBpm">-- <span class="ecg-metric__unit">bpm</span></span>
+                <span class="ecg-metric__note" id="liveEcgStatus">Waiting for signal...</span>
+              </div>
+              <div class="ecg-metric">
+                <span class="ecg-metric__label">Hardware Link</span>
+                <span class="ecg-metric__value" id="liveEcgLinkStatus" style="font-size: 20px;">Offline</span>
+                <span class="ecg-metric__note" id="liveEcgDeviceName">ESP32 Cloud Ingest</span>
               </div>
               <div class="ecg-metric">
                 <span class="ecg-metric__label">HRV · RMSSD</span>
-                <span class="ecg-metric__value">31<span class="ecg-metric__unit">ms</span></span>
-                <span class="ecg-metric__note ecg-metric__note--warn">Low for your baseline</span>
+                <span class="ecg-metric__value"><span class="vital-rmssd-val">31</span><span class="ecg-metric__unit">ms</span></span>
+                <span class="ecg-metric__note ecg-metric__note--warn">Autonomic tone</span>
               </div>
               <div class="ecg-metric">
-                <span class="ecg-metric__label">QTc</span>
-                <span class="ecg-metric__value">458<span class="ecg-metric__unit">ms</span></span>
-                <span class="ecg-metric__note">Upper range · monitoring</span>
-              </div>
-              <div class="ecg-metric">
-                <span class="ecg-metric__label">LF/HF</span>
-                <span class="ecg-metric__value">3.4</span>
-                <span class="ecg-metric__note ecg-metric__note--warn">Sympathetic shift</span>
+                <span class="ecg-metric__label">Buffer Window</span>
+                <span class="ecg-metric__value">750 <span class="ecg-metric__unit">pts</span></span>
+                <span class="ecg-metric__note">3.0s real-time buffer</span>
               </div>
             </div>
           </article>
@@ -1494,6 +1491,47 @@
       </div>
       <button class="btn btn-primary btn-block" type="submit">Send message</button>
     </form>
+  </div>
+</dialog>
+
+<dialog id="pairDeviceModal" aria-labelledby="pairDeviceTitle">
+  <div class="dialog-card dialog-card--pair">
+    <button class="dialog-close" id="pairDeviceClose" type="button" aria-label="Close device manager">
+      <svg class="od-icon" style="--od-icon-size:19px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <path d="M6 6l12 12M18 6 6 18"/>
+      </svg>
+    </button>
+
+    <div class="pair-card-head">
+      <p class="dialog-eyebrow">Telemetry Hardware</p>
+      <h2 class="dialog-title" id="pairDeviceTitle">Pair ESP32 ECG Device</h2>
+      <p class="dialog-sub">Register your hardware token to stream real-time single-lead ECG telemetry into your dashboard.</p>
+    </div>
+
+    <!-- Pairing Form -->
+    <form id="pairDeviceForm" class="dash-form pair-device-form" novalidate style="margin-top: 16px;">
+      <div class="form-field">
+        <label for="deviceTokenInput">Device Token (x-device-token)</label>
+        <input id="deviceTokenInput" name="device_token" type="text" placeholder="e.g. ESP32_BIOAMP_01" required autocomplete="off">
+        <p class="field-help">Use this exact token in your <code>esp32_cloud_firmware.ino</code> header.</p>
+      </div>
+      <div class="form-field">
+        <label for="deviceNameInput">Device Name</label>
+        <input id="deviceNameInput" name="device_name" type="text" placeholder="e.g. Bedside Lead I Monitor" autocomplete="off">
+      </div>
+      <div id="pairDeviceStatus" class="pair-status-msg" hidden></div>
+      <button type="submit" class="btn btn-primary btn-block" id="pairDeviceSubmitBtn">Pair Device</button>
+    </form>
+
+    <!-- Paired Devices List -->
+    <div class="paired-devices-section">
+      <h3 class="paired-section-title">Your Registered Devices</h3>
+      <div id="pairedDevicesLoading" class="devices-loading" hidden>Loading devices…</div>
+      <div id="pairedDevicesEmpty" class="devices-empty" hidden>
+        <p>No telemetry devices paired yet. Enter your hardware token above to pair your ESP32.</p>
+      </div>
+      <div id="pairedDevicesList" class="paired-devices-list"></div>
+    </div>
   </div>
 </dialog>
 

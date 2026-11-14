@@ -22,3 +22,36 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     flowType: 'pkce'
   }
 });
+
+/**
+ * Initiate Google OAuth 2.0 Sign-In
+ * Redirects directly to /auth/callback with no intermediate screen
+ */
+export async function signInWithGoogle() {
+  const redirectUrl = window.location.origin + '/auth/callback';
+  return await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: redirectUrl,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'consent'
+      }
+    }
+  });
+}
+
+/**
+ * Get currently authenticated session
+ */
+export async function getAuthSession() {
+  const { data } = await supabase.auth.getSession();
+  return data?.session || null;
+}
+
+/**
+ * Sign out of active session
+ */
+export async function signOutUser() {
+  return await supabase.auth.signOut();
+}

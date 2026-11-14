@@ -4,11 +4,13 @@
  */
 
 import '../styles/main.css';
-import { supabase } from './supabase.js';
+import { supabase, signInWithGoogle } from './supabase.js';
 import { initLandingInteractions } from './landing.js';
 import {
   initDashboardListeners,
   initLiveTelemetryStream,
+  initCloudEcgMonitor,
+  checkDashboardAuth,
   renderAll,
   updateDashIdentity,
   updateDashDate,
@@ -16,6 +18,7 @@ import {
   closePopovers,
   setActiveNav
 } from './dashboard.js';
+import { initPairDeviceModal } from './pair-device.js';
 import {
   displayNameFromEmail,
   initialsFrom,
@@ -27,6 +30,7 @@ const ORIGINAL_TITLE = document.title;
 
 const authState = {
   signedIn: false,
+  id: '',
   name: '',
   email: '',
   avatar: '',
@@ -64,12 +68,14 @@ function extractUser(user) {
 function applyUserSession(user, token) {
   if (user) {
     authState.signedIn = true;
+    authState.id = user.id || '';
     authState.name = user.name;
     authState.email = user.email;
     authState.avatar = user.avatar || '';
     authState.token = token || '';
   } else {
     authState.signedIn = false;
+    authState.id = '';
     authState.name = '';
     authState.email = '';
     authState.avatar = '';
@@ -155,6 +161,11 @@ export function openDashboard(trigger) {
   updateDashDate();
   renderAll();
 
+  // Initialize live cloud ECG telemetry for the authenticated patient
+  if (authState.id) {
+    initCloudEcgMonitor(authState.id);
+  }
+
   window.scrollTo(0, 0);
   setActiveNav('dash-overview');
 
@@ -232,43 +243,15 @@ function initAuthModalListeners() {
       if (googleSpinner) googleSpinner.hidden = false;
 
       try {
-        const redirectUrl = window.location.origin + '/dashboard';
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: redirectUrl,
-            queryParams: {
-              access_type: 'offline',
-              prompt: 'consent'
-            }
-          }
-        });
-
-        if (error) {
-          throw error;
-        }
+        const { error } = await signInWithGoogle();
+        if (error) throw error;
       } catch (err) {
-        console.warn('Direct OAuth trigger notice:', err.message);
-        // Fallback demo user if Google OAuth credentials not yet added in user's Supabase dashboard
-        setTimeout(() => {
-          googleBtn.disabled = false;
-          googleBtn.removeAttribute('aria-busy');
-          if (googleLabel) googleLabel.textContent = 'Continue with Google';
-          if (googleSpinner) googleSpinner.hidden = true;
-
-          const demoGoogleUser = {
-            id: 'usr_google_maya',
-            name: 'Maya Roberts',
-            email: 'maya.roberts@gmail.com',
-            avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80'
-          };
-          saveSession(demoGoogleUser, 'google_oauth_token');
-          applyUserSession(demoGoogleUser, 'google_oauth_token');
-          closeLoginDialog();
-          // Immediately redirect to /dashboard with no intermediate page!
-          openDashboard();
-          showToast(`Welcome, ${demoGoogleUser.name}!`);
-        }, 600);
+        console.warn('OAuth trigger notice:', err.message);
+        showToast(err.message || 'Google sign-in failed');
+        googleBtn.disabled = false;
+        googleBtn.removeAttribute('aria-busy');
+        if (googleLabel) googleLabel.textContent = 'Continue with Google';
+        if (googleSpinner) googleSpinner.hidden = true;
       }
     });
   }
@@ -314,6 +297,21 @@ function initAppRouting() {
 }
 
 async function initSessionAndRouting() {
+  // 0. Immediate handling for OAuth callback (?code= or /auth/callback)
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('code');
+
+  if (code) {
+    try {
+      await supabase.auth.exchangeCodeForSession(code);
+    } catch (err) {
+      console.warn('OAuth code exchange note:', err.message);
+    }
+    // Smooth redirect directly to /dashboard with zero intermediate pages or buttons
+    window.location.replace('/dashboard');
+    return;
+  }
+
   let activeUser = null;
   let activeToken = '';
 
@@ -405,6 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initAuthModalListeners();
   initDashboardListeners();
   initLiveTelemetryStream();
+  initPairDeviceModal();
   initAppRouting();
   renderHeader();
   initSessionAndRouting();

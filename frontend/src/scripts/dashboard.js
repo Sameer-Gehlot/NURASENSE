@@ -6,6 +6,7 @@
 
 import { svgNode, clearNode, drawKChart, drawTrend } from './charts.js';
 import { showToast, setError, visible, focusAfterClose, currentTimeValue } from './modals.js';
+import { supabase } from './supabase.js';
 
 export const TRIGGER_META = [
   { key: 'meal', label: 'High-carb meal', pts: 8 },
@@ -782,3 +783,308 @@ export function initLiveTelemetryStream() {
     };
   } catch (e) {}
 }
+
+/**
+ * Authentication Gate for Dashboard:
+ * Checks active Supabase session. If unauthenticated, immediately redirects to / (login page).
+ * If authenticated, displays user Google profile photo & name in the navbar.
+ */
+export async function checkDashboardAuth() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session || !session.user) {
+      if (window.location.pathname.startsWith('/dashboard')) {
+        window.location.replace('/');
+      }
+      return null;
+    }
+
+    const user = session.user;
+    const meta = user.user_metadata || {};
+    const name = meta.full_name || meta.name || user.email?.split('@')[0] || 'Patient';
+    const avatar = meta.avatar_url || meta.picture || '';
+
+    updateDashIdentity(name, avatar);
+    return session;
+  } catch (err) {
+    console.warn('Dashboard auth check note:', err);
+    return null;
+  }
+}
+
+/**
+ * Cloud ECG Live Streaming & Waveform Engine
+ * Connects to Railway FastAPI WebSocket at /ws/{user_id}
+ * Rolling buffer: 750 samples (3.0s at 250Hz)
+ * Renders every 40ms via requestAnimationFrame
+ * Dark background #0d1117, green trace #00ff88
+ * Color-coded BPM:
+ *   <60   -> #4fc3f7 (blue)
+ *   60-100 -> #00ff88 (green)
+ *   >100  -> #ff6b6b (red)
+ * Auto-reconnects every 3s on disconnect.
+ */
+export function initCloudEcgMonitor(userId) {
+  if (!userId) return;
+
+  const canvas = document.getElementById('liveEcgCanvas');
+  const bpmEl = document.getElementById('liveEcgBpm');
+  const statusEl = document.getElementById('liveEcgStatus');
+  const liveDot = document.getElementById('ecgLiveDot');
+  const linkStatus = document.getElementById('liveEcgLinkStatus');
+  const ecgState = document.getElementById('ecgState');
+
+  // Buffer of 750 samples (250Hz * 3 seconds)
+  const BUFFER_SIZE = 750;
+  const samples = new Float32Array(BUFFER_SIZE);
+  let sampleIndex = 0;
+  let currentBpm = 0;
+  let isReceivingSignal = false;
+  let lastSignalTime = 0;
+  let ws = null;
+  let reconnectTimer = null;
+  let animFrameId = null;
+  let isPaused = false;
+
+  // Fill with flat baseline initially
+  samples.fill(0);
+
+  // Setup pause toggle
+  const ecgPauseBtn = document.getElementById('ecgPause');
+  if (ecgPauseBtn) {
+    ecgPauseBtn.addEventListener('click', () => {
+      isPaused = !isPaused;
+      if (ecgState) ecgState.textContent = isPaused ? 'Paused' : (isReceivingSignal ? 'Live' : 'Waiting for signal...');
+      if (ecgPauseBtn) ecgPauseBtn.setAttribute('aria-pressed', isPaused ? 'true' : 'false');
+      const pauseLabel = document.getElementById('ecgPauseLabel');
+      if (pauseLabel) pauseLabel.textContent = isPaused ? 'Resume' : 'Pause';
+    });
+  }
+
+  // Determine WebSocket URL
+  // Uses localhost:8765 if on localhost, otherwise wss://YOUR_RAILWAY_URL/ws/{user_id}
+  // Can be overridden via localStorage if user set a custom domain
+  const customRailwayUrl = localStorage.getItem('nurasense_railway_url') || '';
+  const defaultRailwayHost = 'YOUR_RAILWAY_URL';
+  const railwayHost = customRailwayUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '') || defaultRailwayHost;
+
+  const wsUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'ws://localhost:8765/ws/' + userId
+    : `wss://${railwayHost}/ws/${userId}`;
+
+  function updateBpmDisplay(bpm) {
+    if (!bpmEl || !statusEl) return;
+
+    if (!bpm || bpm <= 0 || !isReceivingSignal) {
+      bpmEl.innerHTML = `-- <span class="ecg-metric__unit">bpm</span>`;
+      bpmEl.style.color = 'var(--muted)';
+      statusEl.textContent = 'Waiting for signal...';
+      statusEl.style.color = 'var(--muted)';
+      return;
+    }
+
+    const rounded = Math.round(bpm);
+    bpmEl.innerHTML = `${rounded} <span class="ecg-metric__unit">bpm</span>`;
+
+    if (rounded < 60) {
+      // Bradycardia (<60) -> blue #4fc3f7
+      bpmEl.style.color = '#4fc3f7';
+      statusEl.textContent = '⚠ Bradycardia';
+      statusEl.style.color = '#4fc3f7';
+    } else if (rounded <= 100) {
+      // Normal (60-100) -> green #00ff88
+      bpmEl.style.color = '#00ff88';
+      statusEl.textContent = 'Normal ✓';
+      statusEl.style.color = '#00ff88';
+    } else {
+      // Tachycardia (>100) -> red #ff6b6b
+      bpmEl.style.color = '#ff6b6b';
+      statusEl.textContent = '⚠ Tachycardia';
+      statusEl.style.color = '#ff6b6b';
+    }
+  }
+
+  function setConnectionState(state) {
+    if (state === 'connected') {
+      if (linkStatus) linkStatus.textContent = 'Connected';
+      if (linkStatus) linkStatus.style.color = '#00ff88';
+      if (liveDot) liveDot.className = 'live-dot';
+      if (ecgState && !isPaused) ecgState.textContent = 'Waiting for signal...';
+    } else if (state === 'streaming') {
+      if (linkStatus) linkStatus.textContent = 'Streaming';
+      if (linkStatus) linkStatus.style.color = '#00ff88';
+      if (liveDot) liveDot.className = 'live-dot active';
+      if (ecgState && !isPaused) ecgState.textContent = 'Live';
+    } else {
+      // Offline / disconnected
+      if (linkStatus) linkStatus.textContent = 'Device offline';
+      if (linkStatus) linkStatus.style.color = '#ff6b6b';
+      if (liveDot) liveDot.className = 'live-dot offline';
+      if (ecgState && !isPaused) ecgState.textContent = 'Device offline';
+      if (statusEl) {
+        statusEl.textContent = 'Device offline';
+        statusEl.style.color = 'var(--muted)';
+      }
+    }
+  }
+
+  function connectWs() {
+    if (ws) {
+      try { ws.close(); } catch (_) {}
+    }
+
+    try {
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        setConnectionState('connected');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.samples && Array.isArray(data.samples)) {
+            isReceivingSignal = true;
+            lastSignalTime = Date.now();
+            setConnectionState('streaming');
+
+            // Shift new batch of samples into 750-sample rolling buffer
+            const newSamples = data.samples;
+            for (let i = 0; i < newSamples.length; i++) {
+              samples[sampleIndex] = newSamples[i];
+              sampleIndex = (sampleIndex + 1) % BUFFER_SIZE;
+            }
+
+            if (data.bpm !== undefined && data.bpm !== null) {
+              currentBpm = data.bpm;
+              updateBpmDisplay(currentBpm);
+            }
+          }
+        } catch (err) {}
+      };
+
+      ws.onclose = () => {
+        isReceivingSignal = false;
+        setConnectionState('offline');
+        // Auto-reconnect WebSocket every 3s on disconnect
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connectWs, 3000);
+      };
+
+      ws.onerror = () => {
+        try { ws.close(); } catch (_) {}
+      };
+
+    } catch (e) {
+      setConnectionState('offline');
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connectWs, 3000);
+    }
+  }
+
+  // High-performance 250Hz ECG Canvas Renderer (updates every ~40ms / 60 FPS)
+  let lastDrawTime = 0;
+  function renderEcgWaveform(timestamp) {
+    animFrameId = requestAnimationFrame(renderEcgWaveform);
+
+    if (isPaused || !canvas) return;
+
+    // Rate-limit redraw to ~40ms (25 FPS is sufficient and smooth)
+    if (timestamp - lastDrawTime < 38) return;
+    lastDrawTime = timestamp;
+
+    // Signal timeout: if no samples in 4 seconds, mark waiting
+    if (isReceivingSignal && Date.now() - lastSignalTime > 4000) {
+      isReceivingSignal = false;
+      if (ecgState) ecgState.textContent = 'Waiting for signal...';
+      updateBpmDisplay(0);
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const midY = height / 2;
+
+    // 1. Dark Medical Background #0d1117
+    ctx.fillStyle = '#0d1117';
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. Clinical ECG Grid (major & minor subdivisions)
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(0, 255, 136, 0.05)';
+    ctx.beginPath();
+    const smallStep = 10;
+    for (let x = 0; x < width; x += smallStep) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+    }
+    for (let y = 0; y < height; y += smallStep) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(0, 255, 136, 0.12)';
+    ctx.beginPath();
+    const bigStep = 50;
+    for (let x = 0; x < width; x += bigStep) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+    }
+    for (let y = 0; y < height; y += bigStep) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+    }
+    ctx.stroke();
+
+    // 3. Draw Green ECG Waveform #00ff88
+    ctx.save();
+    ctx.lineWidth = 2.2;
+    ctx.strokeStyle = '#00ff88';
+    ctx.shadowColor = '#00ff88';
+    ctx.shadowBlur = 8;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+
+    const dx = width / BUFFER_SIZE;
+    // Scale factor to map filtered microvolts / sensor counts to canvas height
+    const scaleY = height * 0.38;
+
+    for (let i = 0; i < BUFFER_SIZE; i++) {
+      // Circular read relative to current sampleIndex for continuous scrolling
+      const readIdx = (sampleIndex + i) % BUFFER_SIZE;
+      const rawVal = samples[readIdx];
+      // Normalize signal: rawVal is centered around 0 from bandpass filter
+      const y = midY - (rawVal * scaleY);
+      const clampedY = Math.max(8, Math.min(height - 8, y));
+      const x = i * dx;
+
+      if (i === 0) {
+        ctx.moveTo(x, clampedY);
+      } else {
+        ctx.lineTo(x, clampedY);
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // 4. Sweep line / Cursor indicator at leading edge
+    const cursorX = width - 4;
+    ctx.fillStyle = 'rgba(0, 255, 136, 0.8)';
+    ctx.fillRect(cursorX, 0, 2, height);
+  }
+
+  // Start WebSocket connection & render loop
+  connectWs();
+  animFrameId = requestAnimationFrame(renderEcgWaveform);
+
+  // Return teardown function if needed
+  return () => {
+    if (ws) ws.close();
+    clearTimeout(reconnectTimer);
+    if (animFrameId) cancelAnimationFrame(animFrameId);
+  };
+}
+
