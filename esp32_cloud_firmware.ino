@@ -49,7 +49,7 @@ const char* DEVICE_TOKEN  = "ESP32_BIOAMP_01";
 
 // Sampling Parameters
 const unsigned long SAMPLE_INTERVAL_US = 4000; // 250 Hz = 4000 microseconds
-const int BATCH_SIZE = 25;                     // 25 samples per batch = 100ms window (10 updates/sec)
+const int BATCH_SIZE = 50;                     // 50 samples per batch = 200ms window (5 clean updates/sec)
 
 // FreeRTOS Inter-Core Queue (capacity 300 samples = 1.2 seconds buffer)
 QueueHandle_t ecgQueue;
@@ -95,6 +95,8 @@ void connectWiFi() {
   delay(200);
 
   WiFi.mode(WIFI_STA);
+  // Reduce Wi-Fi RF TX power to 8.5 dBm (prevents 240mA power rail dips from inducing spikes into ECG sensor)
+  WiFi.setTxPower(WIFI_POWER_8_5dBm);
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
