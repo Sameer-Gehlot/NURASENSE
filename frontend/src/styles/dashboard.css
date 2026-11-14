@@ -355,12 +355,6 @@ body.app-mode { background: var(--ground); }
 }
 .mini-btn:hover { border-color: var(--petrol); color: var(--petrol); }
 .mini-btn:disabled { opacity: .55; cursor: default; }
-.ecg-zoom-btn.active {
-  background: rgba(0, 255, 136, 0.2);
-  color: #00ff88;
-  border-color: #00ff88;
-  font-weight: 600;
-}
 
 /* risk */
 .risk-panel { border-color: var(--amber-line); }
