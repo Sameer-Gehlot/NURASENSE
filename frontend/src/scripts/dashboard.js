@@ -862,10 +862,9 @@ export function initCloudEcgMonitor(userId) {
   }
 
   // Determine WebSocket URL
-  // Uses localhost:8765 if on localhost, otherwise wss://YOUR_RAILWAY_URL/ws/{user_id}
-  // Can be overridden via localStorage if user set a custom domain
+  // Uses localhost:8765 if on localhost, otherwise connects to live Railway Cloud Engine
   const customRailwayUrl = localStorage.getItem('nurasense_railway_url') || '';
-  const defaultRailwayHost = 'YOUR_RAILWAY_URL';
+  const defaultRailwayHost = 'nurasense-production.up.railway.app';
   const railwayHost = customRailwayUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '') || defaultRailwayHost;
 
   const wsUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
