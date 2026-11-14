@@ -996,7 +996,7 @@
             <div class="ecg-monitor" id="ecgMonitor">
               <div class="ecg-bar">
                 <span class="ecg-bar__live"><span class="live-dot" id="ecgLiveDot"></span><span id="ecgState">Waiting for signal...</span></span>
-                <span class="ecg-specs">250 Hz Lead I · 50Hz Notch (Q=10) · 0.5–35Hz Clinical Bandpass</span>
+                <span class="ecg-specs">250 Hz Lead I · 50Hz Notch · 0.5–40Hz Bandpass</span>
                 <button type="button" class="mini-btn js-open-pair-device" style="margin-left: auto;">+ Pair ESP32</button>
               </div>
               <canvas id="liveEcgCanvas" class="ecg-realtime-canvas" width="900" height="220" role="img" aria-label="Real-time ECG stream"></canvas>
@@ -1020,8 +1020,8 @@
               </div>
               <div class="ecg-metric">
                 <span class="ecg-metric__label">Buffer Window</span>
-                <span class="ecg-metric__value">280 <span class="ecg-metric__unit">pts</span></span>
-                <span class="ecg-metric__note">1.1s wide clinical zoom</span>
+                <span class="ecg-metric__value">750 <span class="ecg-metric__unit">pts</span></span>
+                <span class="ecg-metric__note">3.0s real-time buffer</span>
               </div>
             </div>
           </article>

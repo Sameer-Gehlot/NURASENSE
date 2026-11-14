@@ -815,8 +815,8 @@ export async function checkDashboardAuth() {
 /**
  * Cloud ECG Live Streaming & Waveform Engine
  * Connects to Railway FastAPI WebSocket at /ws/{user_id}
- * Rolling buffer: 280 samples (~1.12s at 250Hz - Wide clinical uncongested timebase)
- * Renders via requestAnimationFrame with anti-aliasing & 3-point trace smoothing
+ * Rolling buffer: 750 samples (3.0s at 250Hz)
+ * Renders every 40ms via requestAnimationFrame
  * Dark background #0d1117, green trace #00ff88
  * Color-coded BPM:
  *   <60   -> #4fc3f7 (blue)
@@ -834,8 +834,8 @@ export function initCloudEcgMonitor(userId) {
   const linkStatus = document.getElementById('liveEcgLinkStatus');
   const ecgState = document.getElementById('ecgState');
 
-  // Buffer of 280 samples (250Hz * 1.12 seconds - spreads P-Q-R-S-T peaks widely across screen)
-  const BUFFER_SIZE = 280;
+  // Buffer of 750 samples (250Hz * 3 seconds)
+  const BUFFER_SIZE = 750;
   const samples = new Float32Array(BUFFER_SIZE);
   let sampleIndex = 0;
   let currentBpm = 0;
@@ -1038,36 +1038,27 @@ export function initCloudEcgMonitor(userId) {
     }
     ctx.stroke();
 
-    // 3. Draw Green ECG Waveform #00ff88 with Wide Uncongested Morphology
+    // 3. Draw Green ECG Waveform #00ff88
     ctx.save();
-    ctx.lineWidth = 2.4;
+    ctx.lineWidth = 2.2;
     ctx.strokeStyle = '#00ff88';
     ctx.shadowColor = '#00ff88';
     ctx.shadowBlur = 8;
     ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
     ctx.beginPath();
 
     const dx = width / BUFFER_SIZE;
-    // Scale normalized signal cleanly across ~70% of canvas height (avoids clipping at edges)
-    const scaleY = (height / 2) * 0.70;
+    // Dynamic soft scaling so QRS peaks fit cleanly without hitting the canvas rails
+    const scaleY = height * 0.32;
 
     for (let i = 0; i < BUFFER_SIZE; i++) {
       // Circular read relative to current sampleIndex for continuous scrolling
       const readIdx = (sampleIndex + i) % BUFFER_SIZE;
-      let rawVal = samples[readIdx];
-
-      // Smooth 3-point weighted filter to remove micro-jitter without attenuating true R-peaks
-      if (i > 0 && i < BUFFER_SIZE - 1) {
-        const prevIdx = (sampleIndex + i - 1) % BUFFER_SIZE;
-        const nextIdx = (sampleIndex + i + 1) % BUFFER_SIZE;
-        rawVal = 0.2 * samples[prevIdx] + 0.6 * rawVal + 0.2 * samples[nextIdx];
-      }
-
+      const rawVal = samples[readIdx];
       // Soft saturation using tanh curve: preserves small P/T waves and caps peaks smoothly
-      const normalizedVal = Math.tanh(rawVal * 0.75);
+      const normalizedVal = Math.tanh(rawVal * 0.95);
       const y = midY - (normalizedVal * scaleY);
-      const clampedY = Math.max(6, Math.min(height - 6, y));
+      const clampedY = Math.max(10, Math.min(height - 10, y));
       const x = i * dx;
 
       if (i === 0) {
