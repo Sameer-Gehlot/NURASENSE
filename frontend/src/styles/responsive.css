@@ -1,8 +1,8 @@
 /* ---------- Responsive & Accessibility Enhancements ---------- */
 /* ---------- responsive ---------- */
 @media (max-width: 1040px) {
-  .hero__grid { grid-template-columns: minmax(0, 1fr); }
-  .monitor { max-width: 560px; }
+  .hero__grid { grid-template-columns: minmax(0, 1fr); gap: 48px; }
+  .monitor { max-width: 580px; margin-inline: auto; }
   .site-nav { display: none; }
   .dash__grid {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -13,7 +13,7 @@
       "history history";
   }
   .dash__gauge { flex-direction: row; text-align: left; justify-content: flex-start; gap: 18px; padding: 16px; }
-  .alert-band { grid-template-columns: minmax(0, 1fr); }
+  .alert-band { grid-template-columns: minmax(0, 1fr); gap: 36px; }
 }
 @media (max-width: 900px) {
   .base-grid { grid-template-columns: minmax(0, 1fr); }
@@ -28,34 +28,36 @@
 }
 @media (max-width: 720px) {
   .dash__vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .spec-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-  .spec__value { font-size: 17px; }
+  .spec-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 36px; padding-top: 20px; }
+  .spec__value { font-size: 18px; }
   .spec__label { font-size: 10px; }
-  .vital__value { font-size: 21px; }
+  .vital__value { font-size: 20px; }
   .section__head--row .section__aside { display: none; }
   .signal { flex-direction: column; gap: 2px; }
   .signal__note { text-align: left; max-width: none; }
 }
 @media (max-width: 600px) {
   .signed-in-text { display: none; }
-  .site-header__inner { min-height: 66px; }
-  .brand__name { font-size: 17px; }
+  .site-header__inner { min-height: 68px; }
+  .brand__name { font-size: 18px; }
   .brand__sub { display: none; }
   .monitor__risk { align-items: flex-start; }
-  .hero h1 { max-width: 100%; }
-  .footer-top { align-items: flex-start; flex-direction: column; }
+  .hero h1 { max-width: 100%; font-size: clamp(32px, 8.5vw, 40px); }
+  .hero__actions { flex-direction: column; width: 100%; }
+  .hero__actions .btn { width: 100%; }
+  .footer-top { align-items: flex-start; flex-direction: column; gap: 20px; }
   .footer-links { gap: var(--s4); }
   .hist__time { width: 100%; }
   .hist__label { flex-basis: 100%; }
   .dash__gauge { flex-direction: column; align-items: flex-start; }
 }
 @media (max-width: 420px) {
-  .vitals { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .vital { padding: 8px; }
-  .vital__value { font-size: 19px; }
-  .vital__unit { font-size: 9px; }
-  .delta { font-size: 10px; }
-  .spec-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .vitals { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .vital { padding: 8px 6px; }
+  .vital__value { font-size: 17px; }
+  .vital__unit { font-size: 8.5px; }
+  .delta { font-size: 9.5px; }
+  .spec-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 }
 
 /* ---------- dashboard launch ---------- */

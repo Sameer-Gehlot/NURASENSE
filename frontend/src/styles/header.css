@@ -7,27 +7,27 @@
   border-bottom: 1px solid var(--line);
 }
 .site-header__inner {
-  min-height: 74px;
+  min-height: 76px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s4);
+  gap: var(--s5);
 }
 .brand { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; color: var(--ink); }
-.brand__name { font-size: 19px; font-weight: 600; letter-spacing: -.025em; }
+.brand__name { font-size: 19px; font-weight: 700; letter-spacing: -.025em; }
 .brand__sub { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; margin-left: 2px; }
 
-.site-nav ul { display: flex; align-items: center; gap: clamp(14px, 2.2vw, 28px); }
+.site-nav ul { display: flex; align-items: center; gap: clamp(12px, 2vw, 24px); }
 .site-nav a {
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--ink-2);
   text-decoration: none;
-  padding-block: 8px;
-  border-bottom: 1.5px solid transparent;
-  transition: color 180ms var(--ease-out), border-color 180ms var(--ease-out);
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  transition: color 180ms var(--ease-out), background-color 180ms var(--ease-out);
 }
-.site-nav a:hover { color: var(--petrol); border-bottom-color: var(--petrol); }
+.site-nav a:hover { color: var(--petrol); background: rgba(11, 93, 99, 0.06); }
 .header-actions { display: flex; align-items: center; gap: var(--s3); }
 
 .btn {
@@ -35,21 +35,21 @@
   align-items: center;
   justify-content: center;
   gap: var(--s2);
-  min-height: 46px;
-  padding: 0 20px;
+  min-height: 44px;
+  padding: 0 22px;
   border: 1px solid transparent;
-  border-radius: var(--radius-s);
-  font-size: 14.5px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: -.005em;
+  letter-spacing: -.01em;
   text-decoration: none;
-  transition: background-color 180ms var(--ease-out), border-color 180ms var(--ease-out), color 180ms var(--ease-out);
+  transition: background-color 180ms var(--ease-out), border-color 180ms var(--ease-out), color 180ms var(--ease-out), box-shadow 180ms var(--ease-out);
 }
 .btn-primary { background: var(--petrol); color: #fff; }
-.btn-primary:hover { background: var(--petrol-deep); }
+.btn-primary:hover { background: var(--petrol-deep); box-shadow: 0 4px 14px rgba(11, 93, 99, 0.25); }
 .btn-outline { background: transparent; color: var(--ink); border-color: var(--line); }
 .btn-outline:hover { border-color: var(--petrol); color: var(--petrol); background: var(--surface); }
-.btn-quiet { min-height: 40px; padding: 0 14px; background: transparent; color: var(--ink-2); border-color: var(--line); font-size: 13.5px; }
+.btn-quiet { min-height: 38px; padding: 0 16px; border-radius: var(--radius-pill); background: transparent; color: var(--ink-2); border-color: var(--line); font-size: 13.5px; }
 .btn-quiet:hover { border-color: var(--petrol); color: var(--petrol); }
 .btn-block { width: 100%; }
 .btn-google {
@@ -61,7 +61,7 @@
 .btn-google:hover { background: #F7FAF9; border-color: #AFC3BE; }
 .btn-google svg { flex: none; }
 .btn:disabled { cursor: progress; opacity: .85; }
-.header-actions .btn { min-height: 42px; }
+.header-actions .btn { min-height: 42px; padding: 0 20px; }
 
 .signed-in { display: flex; align-items: center; gap: 10px; }
 .signed-in-text { display: grid; line-height: 1.25; }
@@ -101,6 +101,34 @@
   background: var(--petrol);
   flex: none;
 }
-h1, h2 { font-family: var(--font-display); font-weight: 400; letter-spacing: -.014em; }
-h1 em { font-style: italic; color: var(--petrol); }
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  color: var(--ink);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+h1 {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+h2 {
+  font-weight: 700;
+  letter-spacing: -0.024em;
+  line-height: 1.1;
+}
+h3 {
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  line-height: 1.25;
+}
+h4 {
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  line-height: 1.35;
+}
+h1 em, h2 em {
+  font-style: normal;
+  font-weight: inherit;
+  color: var(--petrol);
+}
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }

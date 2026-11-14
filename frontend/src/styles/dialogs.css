@@ -47,10 +47,10 @@ dialog[open]::backdrop { animation: backdrop-in 200ms linear both; }
 .dialog-title {
   margin-top: 5px;
   font-family: var(--font-display);
-  font-size: clamp(27px, 4vw, 31px);
-  font-weight: 400;
-  line-height: 1.1;
-  letter-spacing: -.01em;
+  font-size: clamp(26px, 3.8vw, 30px);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.024em;
   padding-right: 38px;
 }
 .dialog-sub { margin-top: 6px; font-size: 14px; line-height: 1.6; color: var(--muted); }

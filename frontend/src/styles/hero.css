@@ -1,203 +1,824 @@
-/* ---------- hero ---------- */
-.hero { padding-block: clamp(48px, 6vw, 84px) clamp(64px, 7vw, 104px); }
-.hero__grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.04fr) minmax(0, .96fr);
-  gap: clamp(40px, 5.5vw, 72px);
-  align-items: center;
-}
-.hero h1 {
-  margin-top: var(--s5);
-  font-size: clamp(40px, 5vw, 62px);
-  line-height: 1.04;
-  color: var(--ink);
-  max-width: 15ch;
-}
-.hero__lead {
-  margin-top: var(--s5);
-  max-width: 50ch;
-  font-size: clamp(16.5px, 1.35vw, 18.5px);
-  line-height: 1.68;
-  color: var(--ink-2);
-}
-.hero__actions { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s6); }
+/* ==========================================================================
+   NuraSense — Master Hero & Visual Identity System
+   Modeled precisely after VitalCare reference (IMAGE 1)
+   Features:
+   - Deep slate-marine radial container with luminous glass border
+   - Studio lighting & ambient cyan glow
+   - Giant dominant typography: NURA [3D HEART] SENSE
+   - High-fidelity anatomical 3D heart arena
+   - Center apex CTA button
+   - 3-Column floating glassmorphic lower deck
+   - Full dark glass telemetry styling
+   - Complete responsive scaling
+   ========================================================================== */
 
-.spec-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--s4);
-  margin-top: var(--s7);
-  padding-top: var(--s5);
-  border-top: 1px solid var(--line);
-  max-width: 520px;
-}
-.spec__value {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 20px;
-  font-weight: 500;
-  color: var(--ink);
-  letter-spacing: -.01em;
-}
-.spec__label {
-  display: block;
-  margin-top: 2px;
-  font-size: 11.5px;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  color: var(--muted);
+/* ---------- Outer Viewport Framing ---------- */
+.hero-viewport-frame {
+  background: radial-gradient(circle at 50% 18%, #4a6884 0%, #344c62 48%, #243748 100%);
+  padding: clamp(14px, 2.2vw, 32px) clamp(10px, 1.8vw, 24px) clamp(18px, 2.4vw, 32px);
+  position: relative;
+  overflow-x: hidden;
 }
 
-/* monitor card */
-.monitor {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-l);
-  padding: clamp(16px, 2vw, 22px);
-  box-shadow: var(--shadow-card);
-  width: 100%;
+/* ---------- Floating Rounded Hero Container ---------- */
+.hero-frame-container {
+  max-width: 1380px;
+  margin: 0 auto;
+  border-radius: clamp(24px, 3vw, 38px);
+  background: radial-gradient(ellipse at 50% 28%, #254d71 0%, #17344e 45%, #0e2233 100%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 36px 90px -20px rgba(4, 15, 26, 0.72),
+    0 1px 3px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  position: relative;
+  overflow: hidden;
+  padding: clamp(16px, 2vw, 28px) clamp(20px, 3.2vw, 44px) clamp(28px, 3.6vw, 48px);
 }
-.monitor__top {
+
+/* ---------- Ambient Glow & Medical Grid Backdrop ---------- */
+.hero-ambient-glow {
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: clamp(420px, 60vw, 780px);
+  height: clamp(380px, 50vh, 600px);
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.17) 0%, rgba(14, 165, 233, 0.06) 45%, transparent 72%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.hero-grid-pattern {
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 36px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 36px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ---------- Integrated Glass Header inside Hero Container ---------- */
+.site-header--glass {
+  position: relative;
+  z-index: 30;
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 16px;
+  margin-bottom: clamp(16px, 2.5vw, 32px);
+}
+
+.site-header--glass .site-header__inner {
+  min-height: 60px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s3);
-  padding-bottom: var(--s3);
+  gap: var(--s4);
 }
-.monitor__title { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; letter-spacing: .02em; color: var(--ink-2); }
-.live-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--ok);
-  box-shadow: 0 0 0 3px rgba(46, 122, 94, .14);
-  animation: breathe 2.8s ease-in-out infinite;
-}
-@keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
-.tag {
+
+.site-header--glass .brand {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 5px;
-  background: var(--line-2);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--ink-2);
+  gap: 12px;
+  text-decoration: none;
+  color: #ffffff;
 }
-.tag--sample { background: var(--amber-tint); color: var(--amber-ink); }
 
-.ecg-panel {
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
-  background: var(--surface-2);
-  overflow: hidden;
+.site-header--glass .brand__name {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #ffffff;
 }
-.ecg-panel__bar {
+
+.site-header--glass .brand__sub {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: #7dd3fc;
+  text-transform: uppercase;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+}
+
+.site-header--glass .site-nav ul {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 1.4vw, 20px);
+}
+
+.site-header--glass .site-nav a {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  transition: all 180ms var(--ease-out);
+}
+
+.site-header--glass .site-nav a:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.site-header--glass .site-nav a.is-active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* ---------- Button Variants (Lime & Glass Pills) ---------- */
+.btn-lime {
+  background: #C8F344 !important;
+  color: #082216 !important;
+  font-weight: 700 !important;
+  border: 1px solid #D4F843 !important;
+  border-radius: var(--radius-pill) !important;
+  box-shadow: 0 4px 18px rgba(200, 243, 68, 0.32) !important;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 24px;
+  font-size: 14.5px;
+  transition: transform 180ms var(--ease-out), box-shadow 180ms var(--ease-out), background-color 180ms;
+}
+
+.btn-lime:hover {
+  background: #d6fa55 !important;
+  box-shadow: 0 6px 24px rgba(200, 243, 68, 0.48) !important;
+  transform: translateY(-1px);
+}
+
+.btn-glass {
+  background: rgba(255, 255, 255, 0.09) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-radius: var(--radius-pill) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 22px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 180ms var(--ease-out);
+}
+
+.btn-glass:hover {
+  background: rgba(255, 255, 255, 0.18) !important;
+  border-color: rgba(255, 255, 255, 0.32) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px);
+}
+
+/* ---------- Hero Section Layout ---------- */
+.hero--vital {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(28px, 4vw, 44px);
+}
+
+/* ---------- Centerpiece: NURA [3D HEART] SENSE ---------- */
+.hero-centerpiece {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(400px, 52vw) minmax(0, 1fr);
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  gap: clamp(6px, 1.2vw, 20px);
+  min-height: clamp(560px, 64vh, 740px);
+}
+
+/* Brand Flanking Columns */
+.hero-brand-col {
+  display: flex;
+  flex-direction: column;
+  z-index: 5;
+}
+
+.hero-brand-col--left {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.hero-brand-col--right {
+  align-items: flex-end;
+  text-align: right;
+}
+
+/* Eyebrow & Status Pills */
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7dd3fc;
+  margin-bottom: 8px;
+}
+
+.hero-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 10px #38bdf8, 0 0 0 3px rgba(56, 189, 248, 0.25);
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+.hero-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  color: #7dd3fc;
+  padding: 5px 13px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* Giant Dominant Typography */
+.hero-giant-word {
+  font-size: clamp(66px, 9vw, 148px);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+  color: #ffffff;
+  text-shadow: 0 4px 32px rgba(0, 0, 0, 0.45);
+  margin: 0;
+  user-select: none;
+}
+
+.hero-lead-text {
+  margin-top: 16px;
+  max-width: 34ch;
+  font-size: clamp(14px, 1.15vw, 16px);
+  line-height: 1.62;
+  color: rgba(255, 255, 255, 0.74);
+  letter-spacing: -0.01em;
+}
+
+.hero-lead-text em {
+  font-style: italic;
+  color: #C8F344;
+}
+
+/* Right Column Spec Strip */
+.hero-spec-strip {
+  display: flex;
+  gap: clamp(14px, 2vw, 24px);
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.hero-spec-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.spec-num {
+  font-family: var(--font-mono);
+  font-size: clamp(18px, 1.8vw, 24px);
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.1;
+}
+
+.spec-lbl {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 3px;
+}
+
+/* ---------- 3D Anatomical Heart Arena ---------- */
+.hero-heart-arena {
+  position: relative;
+  width: 100%;
+  height: clamp(560px, 64vh, 740px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+#heartCanvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+  filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.45));
+}
+
+#heartCanvas:active {
+  cursor: grabbing;
+}
+
+/* 3D Loader & Fallback */
+.heart-3d-loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(14, 28, 42, 0.7);
+  backdrop-filter: blur(10px);
+  border-radius: var(--radius-l);
+  color: #7dd3fc;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  z-index: 5;
+  transition: opacity 300ms var(--ease-out), visibility 300ms;
+}
+
+.heart-3d-loader.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.heart-3d-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: #94a3b8;
+  gap: 12px;
+}
+
+.heart-3d-fallback.is-hidden {
+  display: none;
+}
+
+/* Floating 3D Micro-Controls */
+.heart-3d-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.heart-tool-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(15, 30, 48, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 160ms var(--ease-out);
+}
+
+.heart-tool-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.32);
+  transform: scale(1.05);
+}
+
+.heart-tool-btn.is-active {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+}
+
+/* Center Apex CTA (Directly Under Heart) */
+.hero-center-cta {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+/* ---------- Lower Deck: 3 Floating Glassmorphic Cards ---------- */
+.hero-deck {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.48fr) minmax(0, 1fr);
+  gap: clamp(14px, 2vw, 24px);
+  align-items: stretch;
+  position: relative;
+  z-index: 10;
+}
+
+.deck-card {
+  background: rgba(255, 255, 255, 0.065);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 22px;
+  padding: clamp(18px, 2.2vw, 26px);
+  color: #ffffff;
+  box-shadow:
+    0 20px 48px -14px rgba(4, 15, 26, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  transition: transform 220ms var(--ease-out), border-color 220ms var(--ease-out);
+}
+
+.deck-card:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  transform: translateY(-2px);
+}
+
+/* Card 1: Clinical Trust Deck Card */
+.deck-card--trust {
+  justify-content: center;
+  gap: 14px;
+}
+
+.avatar-stack {
+  display: flex;
+  align-items: center;
+}
+
+.avatar-pill {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1e3a5f, #0b2238);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -8px;
+}
+
+.avatar-pill:first-child {
+  margin-left: 0;
+}
+
+.avatar-badge {
+  background: #C8F344;
+  color: #082216;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  margin-left: 10px;
+}
+
+.deck-rating {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deck-stars {
+  color: #FBBF24;
+  font-size: 14px;
+  letter-spacing: 2px;
+}
+
+.deck-score {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.deck-desc {
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.68);
+  margin: 0;
+}
+
+/* Card 2: Live Telemetry Monitor Card Overrides */
+.deck-card--monitor {
+  background: rgba(11, 24, 38, 0.62) !important;
+  border: 1px solid rgba(56, 189, 248, 0.22) !important;
+  padding: clamp(16px, 2vw, 22px) !important;
+}
+
+.deck-card--monitor .monitor__top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s2);
-  padding: 7px 11px;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  color: var(--muted);
-  border-bottom: 1px solid var(--line-2);
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
-.ecg-svg {
-  display: block;
-  width: 100%;
-  height: 108px;
-  background-image:
-    repeating-linear-gradient(0deg, rgba(11, 93, 99, .07) 0 1px, transparent 1px 14px),
-    repeating-linear-gradient(90deg, rgba(11, 93, 99, .07) 0 1px, transparent 1px 14px);
-}
-.ecg-svg--sm { height: 92px; }
-.ecg-trace { fill: none; stroke: var(--petrol); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.ecg-track { animation: ecg-scroll 4.6s linear infinite; }
-@keyframes ecg-scroll { to { transform: translateX(-120px); } }
 
-.vitals {
+.deck-card--monitor .monitor__title {
+  color: #ffffff !important;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.tag--lead {
+  background: rgba(56, 189, 248, 0.14) !important;
+  color: #7dd3fc !important;
+  border: 1px solid rgba(56, 189, 248, 0.3) !important;
+  font-size: 9.5px !important;
+  letter-spacing: 0.06em !important;
+}
+
+.deck-card--monitor .ecg-panel {
+  background: rgba(8, 18, 28, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: var(--radius-m);
+  overflow: hidden;
+}
+
+.deck-card--monitor .ecg-svg {
+  height: 72px !important;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(56, 189, 248, 0.08) 0 1px, transparent 1px 12px),
+    repeating-linear-gradient(90deg, rgba(56, 189, 248, 0.08) 0 1px, transparent 1px 12px) !important;
+}
+
+.deck-card--monitor .ecg-trace {
+  stroke: #38bdf8 !important;
+  stroke-width: 2 !important;
+}
+
+.deck-card--monitor .vitals {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-top: 10px;
 }
-.vital {
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
-  padding: 10px 11px;
-  background: var(--surface);
+
+.deck-card--monitor .vital {
+  background: rgba(255, 255, 255, 0.045) !important;
+  border: 1px solid rgba(255, 255, 255, 0.09) !important;
+  border-radius: var(--radius-m);
+  padding: 8px 10px;
 }
-.vital__label {
-  display: block;
+
+.deck-card--monitor .vital__label {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.deck-card--monitor .vital__value {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--muted);
 }
-.vital__value {
+
+.deck-card--monitor .vital__unit {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-left: 2px;
+}
+
+.delta--warn {
+  color: #fbbf24 !important;
+  font-size: 10px;
+}
+
+.deck-card--monitor .monitor__risk {
   display: flex;
-  align-items: baseline;
-  gap: 3px;
-  margin-top: 3px;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 23px;
-  font-weight: 500;
-  line-height: 1.1;
-  color: var(--ink);
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
-.vital__unit { font-size: 10.5px; color: var(--muted); font-weight: 400; }
-.delta {
+
+.deck-card--monitor .gauge {
+  width: 72px;
+  height: 72px;
+}
+
+.deck-card--monitor .gauge__track {
+  stroke: rgba(255, 255, 255, 0.12) !important;
+}
+
+.deck-card--monitor .gauge__arc {
+  stroke: #f59e0b !important;
+}
+
+.deck-card--monitor .gauge__num {
+  color: #ffffff !important;
+  font-size: 18px !important;
+}
+
+.deck-card--monitor .gauge__pct {
+  color: #ffffff !important;
+}
+
+.deck-card--monitor .gauge__cap {
+  color: rgba(255, 255, 255, 0.6) !important;
+  font-size: 8px !important;
+}
+
+.risk-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.risk-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+}
+
+.risk-state {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fbbf24;
+  margin: 0;
+}
+
+.risk-note {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+}
+
+/* Card 3: Multi-Center Protocol & Holographic Scope */
+.deck-card--protocol {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.holo-globe-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+
+.holo-globe-svg {
+  width: 80px;
+  height: 80px;
+  filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.3));
+  animation: pulse-slow 4s ease-in-out infinite;
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.9; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
+.protocol-content h4 {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 6px 0;
+}
+
+.protocol-content p {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.68);
+  margin: 0 0 12px 0;
+}
+
+.deck-link {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  margin-top: 3px;
-  font-size: 11px;
+  gap: 6px;
+  color: #7dd3fc;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--amber-ink);
+  text-decoration: none;
+  transition: color 160ms var(--ease-out), transform 160ms;
 }
-.delta--flat { color: var(--muted); }
 
-.monitor__risk {
-  display: flex;
-  align-items: center;
-  gap: var(--s4);
-  margin-top: 10px;
-  padding: 12px;
-  border: 1px solid var(--amber-line);
-  border-radius: 12px;
-  background: var(--amber-tint);
+.deck-link:hover {
+  color: #C8F344;
+  transform: translateX(3px);
 }
-.risk-label { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--amber-ink); }
-.risk-state { font-size: 17px; font-weight: 600; color: var(--amber-ink); line-height: 1.3; margin-top: 2px; }
-.risk-note { font-size: 12.5px; color: #6B5638; line-height: 1.5; margin-top: 2px; }
-.monitor__foot {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  align-items: center;
-  margin-top: 12px;
-  font-size: 11.5px;
-  color: var(--muted);
-}
-.monitor__foot span + span::before { content: "·"; margin-right: 8px; color: var(--line); }
 
-/* gauge */
-.gauge { position: relative; width: 92px; height: 92px; flex: none; }
-.gauge--lg { width: 124px; height: 124px; }
+/* ---------- Responsive Breakpoints ---------- */
+@media (max-width: 1200px) {
+  .hero-centerpiece {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 42vw) minmax(0, 1fr);
+  }
+  .hero-giant-word {
+    font-size: clamp(52px, 7.5vw, 100px);
+  }
+  .hero-deck {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .hero-centerpiece {
+    grid-template-columns: 1fr;
+    text-align: center;
+    gap: 18px;
+  }
+  .hero-brand-col--left,
+  .hero-brand-col--right {
+    align-items: center;
+    text-align: center;
+  }
+  .hero-lead-text {
+    max-width: 100%;
+  }
+  .hero-heart-arena {
+    height: 440px;
+    order: -1;
+  }
+  .hero-spec-strip {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 600px) {
+  .hero-frame-container {
+    padding: 16px 16px 28px;
+    border-radius: 22px;
+  }
+  .hero-giant-word {
+    font-size: 56px;
+  }
+  .hero-heart-arena {
+    height: 360px;
+  }
+  .hero-center-cta {
+    flex-direction: column;
+    width: 100%;
+    padding: 0 16px;
+  }
+  .hero-center-cta .btn {
+    width: 100%;
+  }
+  .vitals {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ---------- Legacy Helper Preservations ---------- */
+.live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, .2);
+  animation: breathe 2.8s ease-in-out infinite;
+}
+@keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+
+.gauge { position: relative; width: 84px; height: 84px; flex: none; }
 .gauge__svg { display: block; width: 100%; height: 100%; }
-.gauge__track, .gauge__arc { fill: none; stroke-width: 10; }
-.gauge__track { stroke: rgba(140, 82, 8, .16); }
+.gauge__track, .gauge__arc { fill: none; stroke-width: 9; }
+.gauge__track { stroke: rgba(255, 255, 255, .14); }
 .gauge__arc {
-  stroke: var(--amber);
+  stroke: #f59e0b;
   stroke-linecap: round;
-  stroke-dasharray: 364.42px;
-  stroke-dashoffset: 364.42px;
+  stroke-dasharray: 263.89px;
+  stroke-dashoffset: 263.89px;
   transition: stroke-dashoffset 1.1s var(--ease-out) .1s;
 }
 .gauge__center {
@@ -209,12 +830,8 @@
   justify-content: center;
   line-height: 1;
 }
-.gauge__num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 500; color: var(--amber-ink); }
-.gauge--lg .gauge__num { font-size: 27px; }
-.gauge__pct { font-size: 10px; color: var(--amber-ink); margin-left: 1px; }
-.gauge__cap { margin-top: 4px; font-size: 8.5px; letter-spacing: .06em; text-transform: uppercase; color: #6B5638; }
-.gauge.is-in .gauge__arc,
-.gauge--lg.is-in .gauge__arc { stroke-dashoffset: calc(364.42px - 364.42px * var(--risk, .62)); }
-.no-js .chart-risk,
-.no-js .chart-qtc { stroke-dashoffset: 0; }
-.no-js .gauge__arc { stroke-dashoffset: calc(364.42px - 364.42px * var(--risk, .62)); }
+.gauge__num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 600; color: #ffffff; }
+.gauge__pct { font-size: 10px; color: #ffffff; margin-left: 1px; }
+.gauge__cap { margin-top: 3px; font-size: 8px; letter-spacing: .06em; text-transform: uppercase; color: rgba(255, 255, 255, 0.6); }
+.gauge.is-in .gauge__arc { stroke-dashoffset: calc(263.89px - 263.89px * var(--risk, .62)); }
+.no-js .gauge__arc { stroke-dashoffset: calc(263.89px - 263.89px * var(--risk, .62)); }

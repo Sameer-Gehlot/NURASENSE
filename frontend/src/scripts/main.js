@@ -397,9 +397,49 @@ async function initSessionAndRouting() {
   });
 }
 
+function initHeroViewTabs() {
+  const tab3d = document.getElementById('tab3dHeart');
+  const tabMonitor = document.getElementById('tabLiveMonitor');
+  const stage3d = document.getElementById('heart3dStage');
+  const monitorCard = document.getElementById('heroMonitorCard');
+
+  if (!tab3d || !tabMonitor || !stage3d || !monitorCard) return;
+
+  tab3d.addEventListener('click', () => {
+    tab3d.classList.add('is-active');
+    tab3d.setAttribute('aria-selected', 'true');
+    tabMonitor.classList.remove('is-active');
+    tabMonitor.setAttribute('aria-selected', 'false');
+
+    stage3d.classList.remove('is-hidden');
+    monitorCard.classList.add('is-hidden');
+  });
+
+  tabMonitor.addEventListener('click', () => {
+    tabMonitor.classList.add('is-active');
+    tabMonitor.setAttribute('aria-selected', 'true');
+    tab3d.classList.remove('is-active');
+    tab3d.setAttribute('aria-selected', 'false');
+
+    monitorCard.classList.remove('is-hidden');
+    stage3d.classList.add('is-hidden');
+  });
+}
+
 // Bootstrap
 document.addEventListener('DOMContentLoaded', () => {
   initLandingInteractions();
+  initHeroViewTabs();
+
+  // Lazy-load 3D Cardiac Engine in its own chunk
+  import('./heart3d.js')
+    .then(({ initHeart3D }) => {
+      initHeart3D();
+    })
+    .catch((err) => {
+      console.warn('[Heart3D] Failed to load 3D module:', err);
+    });
+
   initAuthModalListeners();
   initDashboardListeners();
   initLiveTelemetryStream();
