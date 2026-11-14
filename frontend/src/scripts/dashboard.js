@@ -17,19 +17,15 @@ export const TRIGGER_META = [
 ];
 
 export const dashState = {
-  potassium: 3.3,
-  lastKTime: '04:12',
+  potassium: 4.2,
+  lastKTime: '',
   hrv: 31,
   triggers: { meal: true, sleep: true, dose: false, cold: false, exercise: false },
   symptomPenalty: 0,
   symptomLabel: '',
   hydration: 1.4,
-  kSeries: [3.9, 3.8, 3.7, 3.8, 3.6, 3.5, 3.6, 3.5, 3.4, 3.5, 3.4, 3.2, 3.3, 3.3],
-  kReadings: [
-    { when: '24 Oct · 04:12', value: 3.3 },
-    { when: '23 Oct · 08:05', value: 3.6 },
-    { when: '21 Oct · 09:10', value: 3.8 }
-  ],
+  kSeries: [],
+  kReadings: [],
   alerts: [
     { id: 'a1', time: '24 Oct · 04:12', title: 'Elevated risk', detail: 'Alert sent to care circle', score: '62%', status: 'open' },
     { id: 'a2', time: '22 Oct · 03:20', title: 'Watch', detail: 'Monitoring, no alert raised', score: '41%', status: 'done' },
@@ -161,21 +157,42 @@ export function renderKReadings() {
   const kReadings = document.getElementById('kReadings');
   if (!kReadings) return;
   clearNode(kReadings);
-  dashState.kReadings.slice(0, 3).forEach(function (reading) {
+
+  if (!dashState.kReadings || dashState.kReadings.length === 0) {
+    const emptyRow = document.createElement('div');
+    emptyRow.className = 'k-reading';
+    emptyRow.innerHTML = '<span style="color:var(--muted); font-size:12px;">Syncing recorded telemetry…</span>';
+    kReadings.appendChild(emptyRow);
+    return;
+  }
+
+  dashState.kReadings.slice(0, 5).forEach(function (reading) {
     const row = document.createElement('div');
     row.className = 'k-reading';
     const when = document.createElement('span');
     when.textContent = reading.when;
     const value = document.createElement('span');
     const strong = document.createElement('strong');
-    strong.textContent = reading.value.toFixed(1);
+    strong.textContent = Number(reading.value).toFixed(1);
     value.appendChild(strong);
     value.appendChild(document.createTextNode(' mmol/L'));
-    if (reading.value < 3.5) {
-      const flag = document.createElement('em');
+
+    const risk = reading.risk || (reading.value < 3.5 ? 'hypokalemia' : reading.value > 5.1 ? 'hyperkalemia' : 'normal');
+    const flag = document.createElement('em');
+    if (risk === 'hypokalemia' || reading.value < 3.5) {
       flag.textContent = ' · low';
+      flag.style.color = '#ff6b6b';
+      value.appendChild(flag);
+    } else if (risk === 'hyperkalemia' || reading.value > 5.1) {
+      flag.textContent = ' · high';
+      flag.style.color = '#ffa726';
+      value.appendChild(flag);
+    } else {
+      flag.textContent = ' · in range';
+      flag.style.color = '#00ff88';
       value.appendChild(flag);
     }
+
     row.appendChild(when);
     row.appendChild(value);
     kReadings.appendChild(row);
@@ -189,12 +206,19 @@ export function renderK() {
   const kChart = document.getElementById('kChart');
   if (!kValue) return;
 
-  const status = kStatusFor(dashState.potassium);
-  kValue.textContent = dashState.potassium.toFixed(1);
-  kStatusChip.textContent = status.label;
-  kStatusChip.classList.toggle('k-chip--ok', status.ok);
-  kMeta.textContent = 'Range 3.5–5.1 · logged ' + dashState.lastKTime;
-  drawKChart(kChart, dashState.kSeries);
+  const currentK = Number(dashState.potassium || 4.2);
+  const status = kStatusFor(currentK);
+  kValue.textContent = currentK.toFixed(1);
+  if (kStatusChip) {
+    kStatusChip.textContent = status.label;
+    kStatusChip.className = `k-chip ${status.ok ? 'k-chip--ok' : ''}`;
+  }
+  if (kMeta) {
+    kMeta.textContent = 'Range 3.5–5.1 · ' + (dashState.lastKTime ? `logged ${dashState.lastKTime}` : 'live telemetry');
+  }
+  if (kChart) {
+    drawKChart(kChart, dashState.kSeries);
+  }
   renderKReadings();
 }
 
@@ -809,6 +833,16 @@ export async function checkDashboardAuth() {
     // Fetch potassium prediction history once on dashboard load after auth check
     fetchKHistory();
 
+    // Subscribe to realtime updates on potassium_predictions table
+    try {
+      supabase
+        .channel('realtime_k_channel')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'potassium_predictions' }, () => {
+          fetchKHistory();
+        })
+        .subscribe();
+    } catch (_) {}
+
     return session;
   } catch (err) {
     console.warn('Dashboard auth check note:', err);
@@ -818,23 +852,54 @@ export async function checkDashboardAuth() {
 
 export async function fetchKHistory() {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const customRailwayUrl = localStorage.getItem('nurasense_railway_url') || '';
-    const defaultRailwayHost = 'nurasense-production.up.railway.app';
-    const railwayHost = customRailwayUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '') || defaultRailwayHost;
-    const wsBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? 'http://localhost:8765'
-      : `https://${railwayHost}`;
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
 
-    const res = await fetch(`${wsBase.replace('wss://', 'https://').replace('ws://', 'http://')}/potassium/${user.id}/history`, {
-      headers: { 'x-device-token': localStorage.getItem('nurasense_device_token') || 'ESP32_BIOAMP_01' }
-    });
-    if (res.ok) {
-      const history = await res.json();
-      if (Array.isArray(history)) {
-        renderKHistory(history.slice(0, 5));
+    let query = supabase
+      .from('potassium_predictions')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.warn('Supabase potassium_predictions fetch:', error.message);
+      return;
+    }
+
+    if (data && data.length > 0) {
+      const latest = data[0];
+      dashState.potassium = Number(latest.predicted_level);
+
+      const d = new Date(latest.created_at);
+      const dStr = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      const tStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      dashState.lastKTime = `${dStr} · ${tStr}`;
+
+      dashState.kReadings = data.map(p => {
+        const pd = new Date(p.created_at);
+        const pdStr = pd.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        const ptStr = pd.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        return {
+          when: `${pdStr} · ${ptStr}`,
+          value: Number(p.predicted_level),
+          risk: p.risk_class
+        };
+      });
+
+      // kSeries: chronological (oldest to newest)
+      const chronological = [...data].reverse();
+      dashState.kSeries = chronological.map(p => Number(p.predicted_level));
+      if (dashState.kSeries.length === 1) {
+        dashState.kSeries = [dashState.kSeries[0], dashState.kSeries[0]];
       }
+
+      renderK();
+      renderKHistory(data.slice(0, 5));
     }
   } catch (err) {
     console.warn('fetchKHistory error:', err);
@@ -844,13 +909,18 @@ export async function fetchKHistory() {
 export function renderKHistory(predictions) {
   const container = document.getElementById('k-history') || document.querySelector('[data-k-history]');
   if (!container || !Array.isArray(predictions)) return;
-  container.innerHTML = predictions.map(p => `
-    <div class="k-history-item k-history-item--${p.risk_class}">
-      <span class="k-history-val">${p.predicted_level} mmol/L</span>
-      <span class="k-history-risk">${p.risk_class}</span>
-      <span class="k-history-time">${new Date(p.created_at).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'})}</span>
-    </div>
-  `).join('');
+  container.innerHTML = predictions.map(p => {
+    const d = new Date(p.created_at);
+    const dStr = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    const tStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return `
+      <div class="k-history-item k-history-item--${p.risk_class}">
+        <span class="k-history-val">${Number(p.predicted_level).toFixed(1)} mmol/L</span>
+        <span class="k-history-risk">${p.risk_class}</span>
+        <span class="k-history-time">${dStr} · ${tStr}</span>
+      </div>
+    `;
+  }).join('');
 }
 
 /**
@@ -1000,42 +1070,35 @@ export function initCloudEcgMonitor(userId) {
               updateBpmDisplay(currentBpm);
             }
 
-            // Potassium handling from WebSocket
+            // Potassium handling from WebSocket (Live Real-Time Inference)
             if (data.potassium) {
               const k = data.potassium;
+              dashState.potassium = Number(k.mmol);
+              const now = new Date();
+              const dStr = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+              const tStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+              dashState.lastKTime = `${dStr} · ${tStr}`;
+              dashState.kSource = 'ecg-ml';
 
-              // Update dashState
-              dashState.potassium = k.mmol;
-              dashState.lastKTime = new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-              dashState.kSource = 'ecg-ml';  // mark as ML-derived, not manual entry
+              // Prepend live prediction to real readings list
+              dashState.kReadings.unshift({
+                when: `${dStr} · ${tStr}`,
+                value: Number(k.mmol),
+                risk: k.risk
+              });
+              if (dashState.kReadings.length > 20) dashState.kReadings.pop();
 
-              // Update potassium display (find existing K+ display element)
-              const kEl = document.getElementById('k-value') || document.querySelector('[data-k-value]') || document.getElementById('kValue');
-              if (kEl) kEl.textContent = k.mmol.toFixed(1);
+              // Append to real trending series
+              dashState.kSeries.push(Number(k.mmol));
+              if (dashState.kSeries.length > 20) dashState.kSeries.shift();
 
-              // Update risk badge
-              const riskEl = document.getElementById('k-risk') || document.querySelector('[data-k-risk]') || document.getElementById('kStatusChip');
-              if (riskEl) {
-                riskEl.textContent = k.risk === 'hypokalemia' ? '⚠ LOW' : k.risk === 'hyperkalemia' ? '⚡ HIGH' : '✓ Normal';
-                riskEl.className = `k-badge k-badge--${k.risk} k-chip ${k.risk === 'normal' ? 'k-chip--ok' : ''}`;
-              }
+              // Update all UI elements with real recorded telemetry
+              renderK();
 
-              // If alert: show toast and update risk score
+              // If alert: show danger toast and bump risk score
               if (k.alert) {
-                showToast(`⚠️ Low potassium detected: ${k.mmol} mmol/L — ECG pattern suggests hypokalemia`, 'danger');
-                // Increase attack risk score
+                showToast(`⚠️ Low potassium detected: ${Number(k.mmol).toFixed(1)} mmol/L — ECG suggests hypokalemia`, 'danger');
                 dashState.riskScore = Math.min(100, (dashState.riskScore || 0) + 15);
-              }
-
-              // Redraw K chart if function exists
-              if (typeof drawKChart === 'function') {
-                const kChartEl = document.getElementById('kChart');
-                if (kChartEl && dashState.kSeries) {
-                  dashState.kSeries[dashState.kSeries.length - 1] = k.mmol;
-                  drawKChart(kChartEl, dashState.kSeries);
-                } else {
-                  try { drawKChart(dashState.potassium); } catch (_) {}
-                }
               }
             }
           }
@@ -1072,8 +1135,8 @@ export function initCloudEcgMonitor(userId) {
     if (timestamp - lastDrawTime < 38) return;
     lastDrawTime = timestamp;
 
-    // Signal timeout: if no samples in 4 seconds, mark waiting
-    if (isReceivingSignal && Date.now() - lastSignalTime > 4000) {
+    // Signal timeout: if no samples in 6 seconds (ONLY when tab is visible)
+    if (!document.hidden && isReceivingSignal && Date.now() - lastSignalTime > 6000) {
       isReceivingSignal = false;
       if (ecgState) ecgState.textContent = 'Waiting for signal...';
       updateBpmDisplay(0);
@@ -1166,6 +1229,29 @@ export function initCloudEcgMonitor(userId) {
     ctx.fillRect(cursorX, 0, 2, height);
   }
 
+  // Handle tab switching & window blur/focus so streaming never freezes or resets
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      lastDrawTime = performance.now();
+      lastSignalTime = Date.now();
+      if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+        connectWs();
+      }
+      fetchKHistory();
+    }
+  };
+
+  const onWindowFocus = () => {
+    lastDrawTime = performance.now();
+    lastSignalTime = Date.now();
+    if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+      connectWs();
+    }
+  };
+
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('focus', onWindowFocus);
+
   // Start WebSocket connection & render loop
   connectWs();
   animFrameId = requestAnimationFrame(renderEcgWaveform);
@@ -1175,6 +1261,8 @@ export function initCloudEcgMonitor(userId) {
     if (ws) ws.close();
     clearTimeout(reconnectTimer);
     if (animFrameId) cancelAnimationFrame(animFrameId);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('focus', onWindowFocus);
   };
 }
 

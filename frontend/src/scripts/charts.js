@@ -19,11 +19,14 @@ export function clearNode(node) {
 
 export function drawKChart(kChart, kSeries) {
   if (!kChart) return;
-  const data = kSeries;
+  const data = (Array.isArray(kSeries) && kSeries.length > 0) ? kSeries : [4.0];
   clearNode(kChart);
   const W = 360, H = 132, L = 26, R = 12, T = 12, B = 22;
-  const min = 2.8, max = 5.6;
-  function x(i) { return L + (W - L - R) * (i / (data.length - 1)); }
+  const min = 2.5, max = 5.8;
+  function x(i) {
+    if (data.length <= 1) return L + (W - L - R) / 2;
+    return L + (W - L - R) * (i / (data.length - 1));
+  }
   function y(v) { return T + ((max - v) / (max - min)) * (H - T - B); }
 
   kChart.appendChild(svgNode('rect', {
@@ -41,22 +44,24 @@ export function drawKChart(kChart, kSeries) {
     kChart.appendChild(svgNode('text', { class: 'axis', x: L - 4, y: y(value) + 3, 'text-anchor': 'end' }, value.toFixed(1)));
   });
 
-  kChart.appendChild(svgNode('text', { class: 'axis', x: L, y: H - 6 }, '14 days ago'));
-  kChart.appendChild(svgNode('text', { class: 'axis', x: W - R, y: H - 6, 'text-anchor': 'end' }, 'Today'));
+  kChart.appendChild(svgNode('text', { class: 'axis', x: L, y: H - 6 }, 'Recorded trend'));
+  kChart.appendChild(svgNode('text', { class: 'axis', x: W - R, y: H - 6, 'text-anchor': 'end' }, 'Latest'));
 
-  const d = data.map(function (value, index) {
-    return (index === 0 ? 'M' : 'L') + x(index).toFixed(1) + ' ' + y(value).toFixed(1);
-  }).join(' ');
-  kChart.appendChild(svgNode('path', { class: 'line', d: d }));
+  if (data.length > 1) {
+    const d = data.map(function (value, index) {
+      return (index === 0 ? 'M' : 'L') + x(index).toFixed(1) + ' ' + y(value).toFixed(1);
+    }).join(' ');
+    kChart.appendChild(svgNode('path', { class: 'line', d: d }));
+  }
 
   data.forEach(function (value, index) {
     if (index === data.length - 1) return;
-    kChart.appendChild(svgNode('circle', { class: 'dot', cx: x(index).toFixed(1), cy: y(value).toFixed(1), r: 1.5, opacity: .5 }));
+    kChart.appendChild(svgNode('circle', { class: 'dot', cx: x(index).toFixed(1), cy: y(value).toFixed(1), r: 2.2, opacity: .7 }));
   });
 
   const last = data[data.length - 1];
-  kChart.appendChild(svgNode('circle', { class: 'dot dot--latest', cx: x(data.length - 1).toFixed(1), cy: y(last).toFixed(1), r: 3.6 }));
-  kChart.setAttribute('aria-label', 'Potassium over the last 14 days, latest ' + last.toFixed(1) + ' millimoles per litre');
+  kChart.appendChild(svgNode('circle', { class: 'dot dot--latest', cx: x(data.length - 1).toFixed(1), cy: y(last).toFixed(1), r: 4.2 }));
+  kChart.setAttribute('aria-label', 'Potassium recorded trend, latest ' + Number(last).toFixed(1) + ' millimoles per litre');
 }
 
 export function drawTrend(trendChart, trendRange, TREND_DATA) {
