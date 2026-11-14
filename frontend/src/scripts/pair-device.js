@@ -111,6 +111,10 @@ export async function loadPairedDevices(userId) {
     }
 
     // Render list of paired devices
+    if (!localStorage.getItem('nurasense_device_token') && devices.length > 0) {
+      localStorage.setItem('nurasense_device_token', devices[0].device_token);
+    }
+
     listEl.innerHTML = devices.map((d) => `
       <div class="paired-device-item" data-id="${d.id || d.device_token}">
         <div class="device-info">
@@ -215,6 +219,9 @@ async function handlePairDeviceSubmit(e) {
       throw error;
     }
 
+    // Store active device token for cloud API history and auth headers
+    localStorage.setItem('nurasense_device_token', device_token);
+
     // Success
     if (statusEl) {
       statusEl.textContent = `✓ Device "${device_name}" paired successfully!`;
@@ -261,6 +268,10 @@ async function removeDevice(id, token, userId) {
 
     const { error } = await query;
     if (error) throw error;
+
+    if (localStorage.getItem('nurasense_device_token') === token) {
+      localStorage.removeItem('nurasense_device_token');
+    }
 
     showToast(`Device ${token} disconnected`);
     await loadPairedDevices(userId);
