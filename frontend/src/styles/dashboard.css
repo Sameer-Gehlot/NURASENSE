@@ -457,6 +457,73 @@ body.app-mode { background: var(--ground); }
 .k-actions { margin-top: 12px; }
 .k-actions .btn { min-height: 40px; font-size: 12.5px; }
 
+/* Potassium ML Badges & History */
+.k-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.k-badge--hypokalemia {
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 107, 107, 0.4);
+}
+.k-badge--normal {
+  background: rgba(0, 255, 136, 0.15);
+  color: #00ff88;
+  border: 1px solid rgba(0, 255, 136, 0.4);
+}
+.k-badge--hyperkalemia {
+  background: rgba(255, 184, 77, 0.15);
+  color: #ffb84d;
+  border: 1px solid rgba(255, 184, 77, 0.4);
+}
+
+.k-history {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--line-2);
+}
+.k-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.k-history-item--hypokalemia {
+  border-left: 3px solid #ff6b6b;
+}
+.k-history-item--normal {
+  border-left: 3px solid #00ff88;
+}
+.k-history-item--hyperkalemia {
+  border-left: 3px solid #ffb84d;
+}
+.k-history-val {
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.k-history-risk {
+  text-transform: capitalize;
+  font-size: 9px;
+  color: var(--muted);
+}
+.k-history-time {
+  font-size: 8.5px;
+  color: var(--muted);
+}
+
 /* triggers */
 .triggers { display: grid; margin-top: 6px; }
 .trigger {

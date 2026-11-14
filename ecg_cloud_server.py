@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 import numpy as np
 import scipy.signal as signal
 from supabase import create_client, Client
+from potassium_ml import PotassiumPredictor
 
 load_dotenv()
 
@@ -51,6 +52,12 @@ if SUPABASE_URL and SUPABASE_SERVICE_KEY:
         print(f"[Supabase] Warning: Could not initialize client: {e}")
 else:
     print("[Supabase] Notice: SUPABASE_SERVICE_KEY not provided. Token lookups will use local fallback.")
+
+# Initialize Kardio-Net / T-wave Potassium Predictor at server startup
+potassium_predictor = PotassiumPredictor()
+
+# In-memory history cache: user_id -> List[dict] for fast REST responses and offline fallback
+in_memory_k_history: Dict[str, List[dict]] = {}
 
 app = FastAPI(
     title="NuraSense Cloud ECG Telemetry Engine",
@@ -141,6 +148,10 @@ class DeviceSignalState:
 
         # Rolling buffer of filtered samples (1500 samples = 6.0s at 250Hz)
         self.filtered_history: deque = deque(maxlen=1500)
+        # Rolling ECG buffer for Kardio-Net ML potassium estimation (maxlen=3750 = 15.0s at 250Hz)
+        self.rolling_ecg_buffer: deque = deque(maxlen=3750)
+        self.last_k_prediction_time: float = 0.0
+        self.last_k_prediction: Optional[Dict[str, Any]] = None
         # Validated RR interval history across consecutive heartbeats
         self.valid_rr_history: deque = deque(maxlen=8)
         self.last_bpm: float = 72.0
@@ -350,6 +361,27 @@ async def ingest_ecg_batch(
         filtered_samples = state.filter_batch(payload.samples)
         bpm = state.calculate_bpm()
 
+        # Append filtered samples to device's rolling buffer (maxlen=3750 = 15s)
+        for s in filtered_samples:
+            state.rolling_ecg_buffer.append(float(s))
+
+        # Run potassium prediction if buffer has >= 1250 samples (5s) and rate-limited to once every 10s
+        now = time.time()
+        if len(state.rolling_ecg_buffer) >= 1250 and (now - state.last_k_prediction_time >= 10.0):
+            buf_arr = np.array(state.rolling_ecg_buffer, dtype=np.float32)
+            k_pred = potassium_predictor.predict(buf_arr, fs=250, bpm=bpm)
+            state.last_k_prediction = k_pred
+            state.last_k_prediction_time = now
+
+            # If trigger_alert is True (or for history tracking), persist to Supabase potassium_predictions
+            asyncio.create_task(
+                save_potassium_prediction(
+                    user_id=user_id,
+                    device_id=x_device_token,
+                    k_pred=k_pred
+                )
+            )
+
     # Broadcast via WebSocket to dashboard
     broadcast_payload = {
         "samples": [round(float(s), 4) for s in filtered_samples],
@@ -357,14 +389,100 @@ async def ingest_ecg_batch(
         "device_token": x_device_token,
         "timestamp": time.time()
     }
+
+    # Add potassium prediction to WebSocket broadcast if available
+    if state.last_k_prediction:
+        broadcast_payload["potassium"] = {
+            "mmol": state.last_k_prediction["potassium_mmol"],
+            "risk": state.last_k_prediction["risk_class"],
+            "confidence": state.last_k_prediction["confidence"],
+            "alert": state.last_k_prediction["trigger_alert"]
+        }
+
     await manager.broadcast(user_id, broadcast_payload)
 
-    return {
+    response_data = {
         "status": "ok",
         "user_id": user_id,
         "processed_samples": len(payload.samples),
         "bpm": bpm
     }
+    if state.last_k_prediction:
+        response_data["potassium"] = broadcast_payload["potassium"]
+
+    return response_data
+
+
+async def save_potassium_prediction(user_id: str, device_id: str, k_pred: dict):
+    """
+    Saves potassium prediction into in-memory history cache and Supabase 'potassium_predictions' table.
+    Record schema: {user_id, device_id, predicted_level, risk_class, confidence, ecg_features: {t_amp, t_slope, bpm}}
+    """
+    record = {
+        "user_id": user_id,
+        "device_id": device_id,
+        "predicted_level": k_pred["potassium_mmol"],
+        "risk_class": k_pred["risk_class"],
+        "confidence": k_pred["confidence"],
+        "ecg_features": k_pred.get("ecg_features", {}),
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    }
+
+    # Store in memory for instant REST lookup and fallback
+    if user_id not in in_memory_k_history:
+        in_memory_k_history[user_id] = []
+    in_memory_k_history[user_id].insert(0, record)
+    if len(in_memory_k_history[user_id]) > 50:
+        in_memory_k_history[user_id].pop()
+
+    # If Supabase client is configured, insert into potassium_predictions table
+    if supabase_client:
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: supabase_client.table("potassium_predictions").insert(record).execute()
+            )
+        except Exception as e:
+            print(f"[Supabase] potassium_predictions insert notice: {e}")
+
+
+@app.get("/potassium/{user_id}/history")
+async def get_potassium_history(
+    user_id: str,
+    x_device_token: Optional[str] = Header(None)
+):
+    """
+    Returns last 20 predictions from potassium_predictions table for that user.
+    Requires x-device-token header for auth.
+    """
+    if not x_device_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing 'x-device-token' header"
+        )
+
+    # Query Supabase table potassium_predictions if available
+    if supabase_client:
+        try:
+            loop = asyncio.get_event_loop()
+            res = await loop.run_in_executor(
+                None,
+                lambda: supabase_client.table("potassium_predictions")
+                    .select("*")
+                    .eq("user_id", user_id)
+                    .order("created_at", desc=True)
+                    .limit(20)
+                    .execute()
+            )
+            if res.data and len(res.data) > 0:
+                return res.data
+        except Exception as e:
+            print(f"[Supabase] History query notice: {e}")
+
+    # Fallback to in-memory history cache
+    user_history = in_memory_k_history.get(user_id, [])
+    return user_history[:20]
 
 
 @app.websocket("/ws/{user_id}")

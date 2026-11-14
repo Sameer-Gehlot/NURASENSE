@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+supabase
+scipy
+numpy
+python-dotenv
+websockets
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch

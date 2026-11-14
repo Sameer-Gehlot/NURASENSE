@@ -1181,15 +1181,16 @@
                 <h2 class="db-title" id="kTitle">Potassium</h2>
                 <p class="db-sub">Latest logged reading</p>
               </div>
-              <span class="k-chip" id="kStatusChip">Below range</span>
+              <span class="k-chip" id="kStatusChip" data-k-risk>Below range</span>
             </div>
-            <div class="k-figure"><strong id="kValue">3.3</strong><span>mmol/L</span></div>
+            <div class="k-figure"><strong id="kValue" data-k-value>3.3</strong><span>mmol/L</span></div>
             <p class="db-sub" id="kMeta">Range 3.5–5.1 · logged 04:12</p>
             <div class="k-chart">
               <svg id="kChart" viewBox="0 0 360 132" role="img" aria-label="Potassium over the last 14 days, currently 3.3 millimoles per litre"></svg>
             </div>
             <div class="k-last"><span>14-day trend</span><span>Target ≥ 3.5</span></div>
             <div class="k-readings" id="kReadings"></div>
+            <div class="k-history" id="k-history" data-k-history></div>
             <div class="k-actions">
               <button class="btn btn-outline btn-block" id="logKCard" type="button">Log a reading</button>
             </div>

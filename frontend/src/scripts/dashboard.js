@@ -805,11 +805,52 @@ export async function checkDashboardAuth() {
     const avatar = meta.avatar_url || meta.picture || '';
 
     updateDashIdentity(name, avatar);
+
+    // Fetch potassium prediction history once on dashboard load after auth check
+    fetchKHistory();
+
     return session;
   } catch (err) {
     console.warn('Dashboard auth check note:', err);
     return null;
   }
+}
+
+export async function fetchKHistory() {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const customRailwayUrl = localStorage.getItem('nurasense_railway_url') || '';
+    const defaultRailwayHost = 'nurasense-production.up.railway.app';
+    const railwayHost = customRailwayUrl.replace(/^https?:\/\//, '').replace(/^wss?:\/\//, '') || defaultRailwayHost;
+    const wsBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? 'http://localhost:8765'
+      : `https://${railwayHost}`;
+
+    const res = await fetch(`${wsBase.replace('wss://', 'https://').replace('ws://', 'http://')}/potassium/${user.id}/history`, {
+      headers: { 'x-device-token': localStorage.getItem('nurasense_device_token') || 'ESP32_BIOAMP_01' }
+    });
+    if (res.ok) {
+      const history = await res.json();
+      if (Array.isArray(history)) {
+        renderKHistory(history.slice(0, 5));
+      }
+    }
+  } catch (err) {
+    console.warn('fetchKHistory error:', err);
+  }
+}
+
+export function renderKHistory(predictions) {
+  const container = document.getElementById('k-history') || document.querySelector('[data-k-history]');
+  if (!container || !Array.isArray(predictions)) return;
+  container.innerHTML = predictions.map(p => `
+    <div class="k-history-item k-history-item--${p.risk_class}">
+      <span class="k-history-val">${p.predicted_level} mmol/L</span>
+      <span class="k-history-risk">${p.risk_class}</span>
+      <span class="k-history-time">${new Date(p.created_at).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'})}</span>
+    </div>
+  `).join('');
 }
 
 /**
@@ -957,6 +998,45 @@ export function initCloudEcgMonitor(userId) {
             if (data.bpm !== undefined && data.bpm !== null) {
               currentBpm = data.bpm;
               updateBpmDisplay(currentBpm);
+            }
+
+            // Potassium handling from WebSocket
+            if (data.potassium) {
+              const k = data.potassium;
+
+              // Update dashState
+              dashState.potassium = k.mmol;
+              dashState.lastKTime = new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+              dashState.kSource = 'ecg-ml';  // mark as ML-derived, not manual entry
+
+              // Update potassium display (find existing K+ display element)
+              const kEl = document.getElementById('k-value') || document.querySelector('[data-k-value]') || document.getElementById('kValue');
+              if (kEl) kEl.textContent = k.mmol.toFixed(1);
+
+              // Update risk badge
+              const riskEl = document.getElementById('k-risk') || document.querySelector('[data-k-risk]') || document.getElementById('kStatusChip');
+              if (riskEl) {
+                riskEl.textContent = k.risk === 'hypokalemia' ? '⚠ LOW' : k.risk === 'hyperkalemia' ? '⚡ HIGH' : '✓ Normal';
+                riskEl.className = `k-badge k-badge--${k.risk} k-chip ${k.risk === 'normal' ? 'k-chip--ok' : ''}`;
+              }
+
+              // If alert: show toast and update risk score
+              if (k.alert) {
+                showToast(`⚠️ Low potassium detected: ${k.mmol} mmol/L — ECG pattern suggests hypokalemia`, 'danger');
+                // Increase attack risk score
+                dashState.riskScore = Math.min(100, (dashState.riskScore || 0) + 15);
+              }
+
+              // Redraw K chart if function exists
+              if (typeof drawKChart === 'function') {
+                const kChartEl = document.getElementById('kChart');
+                if (kChartEl && dashState.kSeries) {
+                  dashState.kSeries[dashState.kSeries.length - 1] = k.mmol;
+                  drawKChart(kChartEl, dashState.kSeries);
+                } else {
+                  try { drawKChart(dashState.potassium); } catch (_) {}
+                }
+              }
             }
           }
         } catch (err) {}
