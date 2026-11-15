@@ -149,6 +149,7 @@ void sendBatchToCloud(int* samples, int count) {
     http.addHeader("Content-Type", "application/json");
     http.addHeader("x-device-token", DEVICE_TOKEN);
     http.setReuse(true); // Maintain connection alive
+    http.setTimeout(6000); // 6-second timeout margin for mobile hotspot/jitter
     isHttpConnected = true;
   }
 
@@ -215,7 +216,7 @@ void setup() {
   Serial.println(DEVICE_TOKEN);
 
   client.setInsecure(); // Skip CA verification for high-speed embedded telemetry
-  client.setTimeout(2); // 2-second network timeout
+  client.setTimeout(6); // 6-second network timeout
 
   connectWiFi();
 

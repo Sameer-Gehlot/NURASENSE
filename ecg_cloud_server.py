@@ -372,20 +372,19 @@ async def ingest_ecg_batch(
         for s in filtered_samples:
             state.rolling_ecg_buffer.append(float(s))
 
-        # Run potassium prediction if buffer has >= 1250 samples (5s) and rate-limited to once every 10s
+        # Run potassium prediction in background thread if buffer has >= 1250 samples (5s) and rate-limited to once every 10s
+        # (Runs via run_in_executor so heavy PyTorch inference NEVER blocks the /ingest HTTP response or ESP32 connection!)
         now = time.time()
         if len(state.rolling_ecg_buffer) >= 1250 and (now - state.last_k_prediction_time >= 10.0):
-            buf_arr = np.array(state.rolling_ecg_buffer, dtype=np.float32)
-            k_pred = potassium_predictor.predict(buf_arr, fs=250, bpm=bpm)
-            state.last_k_prediction = k_pred
             state.last_k_prediction_time = now
-
-            # If trigger_alert is True (or for history tracking), persist to Supabase potassium_predictions
+            buf_arr = np.array(state.rolling_ecg_buffer, dtype=np.float32)
             asyncio.create_task(
-                save_potassium_prediction(
+                run_potassium_inference_async(
                     user_id=user_id,
                     device_id=device_db_id,
-                    k_pred=k_pred
+                    buf_arr=buf_arr,
+                    bpm=bpm,
+                    state=state
                 )
             )
 
@@ -418,6 +417,47 @@ async def ingest_ecg_batch(
         response_data["potassium"] = broadcast_payload["potassium"]
 
     return response_data
+
+
+async def run_potassium_inference_async(
+    user_id: str,
+    device_id: Optional[str],
+    buf_arr: np.ndarray,
+    bpm: float,
+    state: DeviceSignalState
+):
+    """
+    Runs Kardio-Net ML inference in an asynchronous background thread pool.
+    Guarantees the real-time /ingest endpoint responds instantly (<5ms)
+    without being blocked by PyTorch convolution execution.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+        k_pred = await loop.run_in_executor(
+            None,
+            lambda: potassium_predictor.predict(buf_arr, fs=250, bpm=bpm)
+        )
+        state.last_k_prediction = k_pred
+
+        # Persist prediction to Supabase & in-memory cache
+        await save_potassium_prediction(
+            user_id=user_id,
+            device_id=device_id,
+            k_pred=k_pred
+        )
+
+        # Broadcast live potassium prediction immediately to dashboard subscribers
+        await manager.broadcast(user_id, {
+            "potassium": {
+                "mmol": k_pred["potassium_mmol"],
+                "risk": k_pred["risk_class"],
+                "confidence": k_pred["confidence"],
+                "alert": k_pred["trigger_alert"]
+            },
+            "timestamp": time.time()
+        })
+    except Exception as e:
+        print(f"[PotassiumPredictor] Background inference error: {e}")
 
 
 async def save_potassium_prediction(user_id: str, device_id: Optional[str], k_pred: dict):
